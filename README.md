@@ -11,7 +11,30 @@ AI 기반 온라인 PECS 의사소통 플랫폼입니다.
 
 ## 로컬 실행
 
-### 백엔드
+### Docker Compose로 한 번에 실행
+
+Docker Desktop을 실행한 뒤 프로젝트 루트에서 다음 명령을 사용합니다.
+
+```bash
+docker compose up --build
+```
+
+- 웹 화면: `http://localhost:5173`
+- API 문서: `http://localhost:8000/docs`
+- 상태 확인: `http://localhost:8000/api/health`
+
+컨테이너를 종료하려면 다음 명령을 사용합니다.
+
+```bash
+docker compose down
+```
+
+소스 디렉터리가 컨테이너에 연결되어 있어 코드 변경 시 자동으로
+새로고침됩니다.
+
+### 개별 실행
+
+#### 백엔드
 
 ```bash
 cd backend
@@ -22,7 +45,7 @@ uvicorn app.main:app --reload
 
 API 문서는 `http://localhost:8000/docs`에서 확인할 수 있습니다.
 
-### 프런트엔드
+#### 프런트엔드
 
 ```bash
 cd frontend

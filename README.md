@@ -19,9 +19,9 @@ Docker Desktop을 실행한 뒤 프로젝트 루트에서 다음 명령을 사�
 docker compose up --build
 ```
 
-- 웹 화면: `http://localhost:5173`
-- API 문서: `http://localhost:8000/docs`
-- 상태 확인: `http://localhost:8000/api/health`
+- 웹 화면: `http://127.0.0.1:5173`
+- API 문서: `http://127.0.0.1:8000/docs`
+- 상태 확인: `http://127.0.0.1:8000/api/health`
 
 컨테이너를 종료하려면 다음 명령을 사용합니다.
 
@@ -43,7 +43,7 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-API 문서는 `http://localhost:8000/docs`에서 확인할 수 있습니다.
+API 문서는 `http://127.0.0.1:8000/docs`에서 확인할 수 있습니다.
 
 #### 프런트엔드
 
@@ -53,7 +53,7 @@ npm install
 npm run dev
 ```
 
-웹 화면은 `http://localhost:5173`에서 확인할 수 있습니다.
+웹 화면은 `http://127.0.0.1:5173`에서 확인할 수 있습니다.
 
 ## 개발 문서
 

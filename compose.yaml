@@ -3,20 +3,23 @@ name: pesc-mate
 services:
   mongodb:
     image: mongo:8.0
+    command: ["mongod", "--quiet"]
     ports:
       - "127.0.0.1:27018:27017"
     volumes:
       - mongodb_data:/data/db
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
-      interval: 5s
+      interval: 30s
       timeout: 3s
       retries: 10
+    logging:
+      driver: "none"
 
   backend:
     build:
       context: ./backend
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --no-access-log
     environment:
       MONGODB_URI: mongodb://mongodb:27017
       MONGODB_DATABASE: pesc_mate
@@ -35,7 +38,7 @@ services:
         - python
         - -c
         - import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')
-      interval: 5s
+      interval: 30s
       timeout: 3s
       retries: 5
       start_period: 5s

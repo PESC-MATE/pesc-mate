@@ -1,14 +1,32 @@
 name: pesc-mate
 
 services:
+  mongodb:
+    image: mongo:8.0
+    ports:
+      - "127.0.0.1:27018:27017"
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   backend:
     build:
       context: ./backend
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      MONGODB_URI: mongodb://mongodb:27017
+      MONGODB_DATABASE: pesc_mate
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
       - ./backend:/app
+    depends_on:
+      mongodb:
+        condition: service_healthy
     healthcheck:
       test:
         - CMD
@@ -36,4 +54,5 @@ services:
         condition: service_healthy
 
 volumes:
+  mongodb_data:
   frontend_node_modules:

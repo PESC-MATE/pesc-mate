@@ -4,6 +4,45 @@ AI 기반 온라인 PECS 의사소통 플랫폼입니다.
 
 ## 프로젝트 구조
 
+## 실행 가능한 프로토타입
+
+카테고리별 이모지 카드 18종, 검색, 최대 12장 선택·삭제·순서 변경,
+규칙 기반 한국어 문장 생성, 브라우저 TTS, 사용 빈도 추천과 전체 기간
+이용 대시보드를 제공합니다. 문장 만들기 시 MongoDB에 기록을 저장합니다.
+같은 보드의 재시도는 중복 집계하지 않으며 보드를 변경하면 새 기록이 됩니다.
+
+현재는 인증 없는 공용 데모 프로필입니다. 개인별 권한,
+기간 필터, 카드 업로드, TTS 성공 기록은 아직 구현하지 않았습니다.
+한국어 음성 재생은 브라우저·운영체제의 한국어 TTS 지원이 필요합니다.
+Qwen 모델 기능은 현재 꺼져 있으며 외부 AI API를 호출하지 않습니다.
+외부 API 키나 유료 가입은 필요하지 않습니다.
+
+기록은 MongoDB의 `pesc_mate.communication_sessions` 컬렉션에 저장됩니다.
+Docker 실행 시 데이터는 `mongodb_data` 볼륨에 유지됩니다. 개별 실행에서는
+`MONGODB_URI`와 `MONGODB_DATABASE` 환경 변수로 연결 정보를 설정합니다.
+
+간단한 시연: `나 → 물 → 마시다` 선택 → `문장 만들기 · 저장` →
+`읽어주기` → `이용 현황`에서 저장 결과 확인.
+
+백엔드 테스트: `cd backend` 후 `python -m unittest test_communication -v`.
+프런트엔드 검증: `cd frontend` 후 `npm run build`.
+
+### 소스 구성
+
+### MongoDB 실행
+
+Docker Compose는 MongoDB를 함께 실행하므로 별도 설치가 필요하지 않습니다.
+개별 실행에서는 MongoDB를 먼저 시작해야 하며 기본 연결 주소는
+`mongodb://127.0.0.1:27017`, 기본 데이터베이스 이름은 `pesc_mate`입니다.
+
+VS Code MongoDB 확장에서는 다음 연결 문자열을 사용합니다.
+
+```text
+mongodb://127.0.0.1:27018/pesc_mate
+```
+
+MongoDB 포트는 로컬 PC에서만 접근할 수 있도록 `127.0.0.1`에 바인딩됩니다.
+
 - `frontend`: React와 Vite 기반 웹 클라이언트
 - `backend`: FastAPI 기반 API 서버
 - `ai`: 카드 추천 및 문장 생성 기능

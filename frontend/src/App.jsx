@@ -1,8 +1,12 @@
 import { useEffect, useState } from "react";
 
-import { request } from "./services/api";
+import { hasToken, request, setToken } from "./services/api";
 
 function App() {
+  const [user, setUser] = useState(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [username, setUsername] = useState('demo');
+  const [password, setPassword] = useState('demo1234');
   const [cards, setCards] = useState([]);
   const [recommended, setRecommended] = useState([]);
   const [board, setBoard] = useState([]);
@@ -22,9 +26,41 @@ function App() {
     try {
       const [all, rec, dashboard] = await Promise.all([request('/cards'), request('/recommendations'), request('/dashboard')]);
       setCards(all); setRecommended(rec); setStats(dashboard); setLoaded(true);
-    } catch { setError('서버에 연결하지 못했습니다. 백엔드 실행 후 다시 연결해 주세요.'); }
+    } catch (e) {
+      if (e.status === 401) { setToken(null); setUser(null); setLoaded(false); setError('로그인이 만료되었습니다. 다시 로그인해 주세요.'); }
+      else setError(e.message || '서버에 연결하지 못했습니다.');
+    }
   }
-  useEffect(() => { load(); return () => window.speechSynthesis?.cancel(); }, []);
+  useEffect(() => {
+    async function restoreLogin() {
+      if (!hasToken()) { setAuthReady(true); return; }
+      try {
+        const account = await request('/auth/me');
+        setUser(account);
+        await load();
+      } catch { setToken(null); }
+      finally { setAuthReady(true); }
+    }
+    restoreLogin();
+    return () => window.speechSynthesis?.cancel();
+  }, []);
+
+  async function handleLogin(event) {
+    event.preventDefault(); setBusy(true); setError('');
+    try {
+      const result = await request('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) });
+      setToken(result.access_token); setUser(result.user);
+      await load();
+    } catch (e) { setError(e.message); }
+    finally { setBusy(false); setAuthReady(true); }
+  }
+
+  async function handleLogout() {
+    setBusy(true);
+    try { await request('/auth/logout', { method: 'POST' }); } catch { /* local logout still applies */ }
+    window.speechSynthesis?.cancel(); setToken(null); setUser(null); setLoaded(false);
+    setCards([]); setRecommended([]); setStats(null); setBoard([]); setText(''); setError(''); setBusy(false);
+  }
 
   function updateBoard(next) {
     window.speechSynthesis?.cancel(); setSpeaking(false);
@@ -65,8 +101,19 @@ function App() {
   function tile(card) {
     return <button className="card" key={card.id} disabled={busy} onClick={() => add(card)}><span aria-hidden="true">{card.symbol}</span>{card.label}</button>;
   }
+  if (!authReady) return <main className="login-page"><p role="status">로그인 정보를 확인하는 중입니다…</p></main>;
+  if (!user) return <main className="login-page"><section className="login-card">
+    <p className="eyebrow">그림으로 전하는 나의 이야기</p><h1>PESC MATE</h1>
+    <h2>로그인</h2><p className="muted">내 카드 기록과 추천을 불러옵니다.</p>
+    {error && <div role="alert" className="error">{error}</div>}
+    <form onSubmit={handleLogin}>
+      <label>아이디<input autoFocus autoComplete="username" value={username} onChange={e => setUsername(e.target.value)} required maxLength="64" /></label>
+      <label>비밀번호<input type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} required maxLength="128" /></label>
+      <button className="primary full" disabled={busy}>{busy ? '로그인 중…' : '로그인'}</button>
+    </form><p className="demo-account">데모 계정: <code>demo</code> / <code>demo1234</code></p>
+  </section></main>;
   return <main className="app">
-    <header><div><p className="eyebrow">그림으로 전하는 나의 이야기</p><h1>PESC MATE</h1></div><span className="status">공용 데모 프로필 · {loaded ? '연결됨' : '연결 대기'}</span></header>
+    <header><div><p className="eyebrow">그림으로 전하는 나의 이야기</p><h1>PESC MATE</h1></div><div className="account"><span className="status">{user.name} · {loaded ? '연결됨' : '연결 대기'}</span><button onClick={handleLogout} disabled={busy}>로그아웃</button></div></header>
     <nav aria-label="주 메뉴"><button className={tab === 'cards' ? 'active' : ''} onClick={() => setTab('cards')}>그림으로 말하기</button><button className={tab === 'dashboard' ? 'active' : ''} onClick={() => setTab('dashboard')}>이용 현황</button></nav>
     {error && <div role="alert" className="error">{error} <button disabled={busy} onClick={load}>다시 연결</button></div>}
     {!loaded && !error && <p role="status">카드를 불러오는 중입니다…</p>}
@@ -85,13 +132,13 @@ function App() {
         <div className="actions"><button className="primary" disabled={!text || busy || speaking} onClick={speak}>🔊 읽어주기</button><button disabled={!speaking} onClick={() => { window.speechSynthesis.cancel(); setSpeaking(false); }}>중지</button></div>
         <p className="muted">현재는 규칙 기반 문장 생성을 사용합니다. 지원하지 않는 조합은 선택한 단어를 순서대로 표시합니다.</p>
       </section></div>
-    </> : <section><h2>우리의 의사소통 기록</h2><p className="muted">공용 데모 프로필 · 전체 기간 · 문장 저장 기준 (개별 클릭은 집계하지 않음)</p>
+    </> : <section><h2>나의 의사소통 기록</h2><p className="muted">{user.name} · 전체 기간 · 문장 저장 기준 (개별 클릭은 집계하지 않음)</p>
       {stats && <><div className="metrics"><div>저장한 문장<strong>{stats.sessions}개</strong></div><div>사용한 카드<strong>{stats.selections}장</strong></div></div>
         <h3>카테고리별 사용</h3>{Object.entries(stats.categories).map(([name, count]) => <div className="bar" key={name}><span>{name}</span><meter min="0" max={Math.max(stats.selections, 1)} value={count} /> {count}회</div>)}
         <h3>자주 사용한 카드</h3><div className="categories">{stats.top_cards.slice(0, 8).map(c => <span className="status" key={c.id}>{c.symbol} {c.label} · {c.count}회</span>)}</div>
         <h3>최근 문장</h3>{!stats.recent.length ? <p className="empty">아직 기록이 없어요. 첫 문장을 만들어 보세요.</p> : <ul className="history">{stats.recent.map(r => <li key={r.id}><span>{r.sentence}</span><time>{new Date(r.created_at).toLocaleString('ko-KR')}</time></li>)}</ul>}</>}
     </section>}
-    <footer>실행용 프로토타입 · 실제 개인정보를 입력하지 마세요. 계정별 접근 제어는 아직 제공하지 않습니다.</footer>
+    <footer>실행용 프로토타입 · 실제 개인정보를 입력하지 마세요.</footer>
   </main>;
 }
 

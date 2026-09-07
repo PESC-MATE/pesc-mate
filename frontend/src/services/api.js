@@ -1,14 +1,33 @@
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? "";
 
+const TOKEN_KEY = 'pesc-mate-token';
+
+export function setToken(token) {
+  if (token) localStorage.setItem(TOKEN_KEY, token);
+  else localStorage.removeItem(TOKEN_KEY);
+}
+
+export function hasToken() {
+  return Boolean(localStorage.getItem(TOKEN_KEY));
+}
+
 export async function request(path, options = {}) {
   const response = await fetch(`${API_BASE_URL}/api${path}`, {
     ...options,
     signal: AbortSignal.timeout(15000),
-    headers: { 'Content-Type': 'application/json', ...options.headers },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(localStorage.getItem(TOKEN_KEY) ? { Authorization: `Bearer ${localStorage.getItem(TOKEN_KEY)}` } : {}),
+      ...options.headers,
+    },
   });
-  const data = await response.json();
-  if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : '요청을 처리하지 못했습니다.');
+  const data = response.status === 204 ? null : await response.json();
+  if (!response.ok) {
+    const error = new Error(typeof data?.detail === 'string' ? data.detail : '요청을 처리하지 못했습니다.');
+    error.status = response.status;
+    throw error;
+  }
   return data;
 }
 

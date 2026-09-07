@@ -53,22 +53,22 @@ def sentence(ids):
     return ' · '.join(INDEX[key]['label'] for key in ids)
 
 
-def save_session(request):
+def save_session(request, user_id):
     card_ids = list(request.cards)
     result = sentence(card_ids)
     request_id = str(request.request_id)
     try:
         collection = _collection()
-        existing = collection.find_one({'_id': request_id})
+        existing = collection.find_one({'_id': request_id, 'user_id': user_id})
         if existing:
             if existing['cards'] != card_ids:
                 raise HTTPException(409, '같은 요청 번호에 다른 카드가 전달되었습니다.')
             return _public(existing)
-        document = {'_id': request_id, 'cards': card_ids, 'sentence': result, 'created_at': datetime.now(timezone.utc)}
+        document = {'_id': request_id, 'user_id': user_id, 'cards': card_ids, 'sentence': result, 'created_at': datetime.now(timezone.utc)}
         try:
             collection.insert_one(document)
         except DuplicateKeyError:
-            existing = collection.find_one({'_id': request_id})
+            existing = collection.find_one({'_id': request_id, 'user_id': user_id})
             if not existing or existing['cards'] != card_ids:
                 raise HTTPException(409, '같은 요청 번호에 다른 카드가 전달되었습니다.')
             return _public(existing)
@@ -79,9 +79,9 @@ def save_session(request):
         raise HTTPException(503, 'MongoDB에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.') from exc
 
 
-def statistics():
+def statistics(user_id):
     try:
-        rows = [_public(row) for row in _collection().find({}).sort('created_at', -1)]
+        rows = [_public(row) for row in _collection().find({'user_id': user_id}).sort('created_at', -1)]
     except PyMongoError as exc:
         raise HTTPException(503, 'MongoDB에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.') from exc
     counts = Counter(key for row in rows for key in row['cards'])

@@ -103,7 +103,7 @@ function App() {
   }
   if (!authReady) return <main className="login-page"><p role="status">로그인 정보를 확인하는 중입니다…</p></main>;
   if (!user) return <main className="login-page"><section className="login-card">
-    <p className="eyebrow">그림으로 전하는 나의 이야기</p><h1>PESC MATE</h1>
+    <div className="login-mascot" aria-hidden="true">💬</div><p className="eyebrow">그림으로 전하는 나의 이야기</p><h1>PESC MATE</h1>
     <h2>로그인</h2><p className="muted">내 카드 기록과 추천을 불러옵니다.</p>
     {error && <div role="alert" className="error">{error}</div>}
     <form onSubmit={handleLogin}>
@@ -113,12 +113,12 @@ function App() {
     </form><p className="demo-account">데모 계정: <code>demo</code> / <code>demo1234</code></p>
   </section></main>;
   return <main className="app">
-    <header><div><p className="eyebrow">그림으로 전하는 나의 이야기</p><h1>PESC MATE</h1></div><div className="account"><span className="status">{user.name} · {loaded ? '연결됨' : '연결 대기'}</span><button onClick={handleLogout} disabled={busy}>로그아웃</button></div></header>
-    <nav aria-label="주 메뉴"><button className={tab === 'cards' ? 'active' : ''} onClick={() => setTab('cards')}>그림으로 말하기</button><button className={tab === 'dashboard' ? 'active' : ''} onClick={() => setTab('dashboard')}>이용 현황</button></nav>
+    <header><div className="brand"><span className="brand-mark" aria-hidden="true">💬</span><div><p className="eyebrow">그림으로 전하는 나의 이야기</p><h1>PESC MATE</h1></div></div><div className="account"><span className="profile-avatar" aria-hidden="true">😊</span><span className="status">{user.name} · {loaded ? '연결됨' : '연결 대기'}</span><button onClick={handleLogout} disabled={busy}>로그아웃</button></div></header>
+    <nav aria-label="주 메뉴"><button className={tab === 'cards' ? 'active' : ''} onClick={() => setTab('cards')}><span aria-hidden="true">🖼️</span>그림으로 말하기</button><button className={tab === 'dashboard' ? 'active' : ''} onClick={() => setTab('dashboard')}><span aria-hidden="true">📊</span>이용 현황</button></nav>
     {error && <div role="alert" className="error">{error} <button disabled={busy} onClick={load}>다시 연결</button></div>}
     {!loaded && !error && <p role="status">카드를 불러오는 중입니다…</p>}
-    {tab === 'cards' ? <>
-      <section><h2>자주 쓰는 카드</h2><p className="muted">저장한 사용 횟수를 바탕으로 추천해요.</p><div className="cards recommendations">{recommended.map(tile)}</div></section>
+    {tab === 'cards' ? <div className="communication-layout">
+      <section className="recommend-panel"><div className="panel-heading"><span aria-hidden="true">⭐</span><div><h2>자주 쓰는 카드</h2><p className="muted">나를 위한 추천</p></div></div><div className="cards recommendations">{recommended.map(tile)}</div></section>
       <div className="workspace"><section><div className="section-title"><h2>무엇을 말하고 싶나요?</h2><input aria-label="카드 검색" placeholder="카드 이름 검색" value={search} onChange={e => setSearch(e.target.value)} /></div>
         <div className="categories" aria-label="카테고리">{['전체', ...new Set(cards.map(c => c.category))].map(c => <button key={c} aria-pressed={category === c} className={category === c ? 'active' : ''} onClick={() => setCategory(c)}>{c}</button>)}</div>
         <div className="cards">{cards.filter(c => (category === '전체' || c.category === category) && c.label.includes(search.trim())).map(tile)}</div>
@@ -132,7 +132,7 @@ function App() {
         <div className="actions"><button className="primary" disabled={!text || busy || speaking} onClick={speak}>🔊 읽어주기</button><button disabled={!speaking} onClick={() => { window.speechSynthesis.cancel(); setSpeaking(false); }}>중지</button></div>
         <p className="muted">현재는 규칙 기반 문장 생성을 사용합니다. 지원하지 않는 조합은 선택한 단어를 순서대로 표시합니다.</p>
       </section></div>
-    </> : <section><h2>나의 의사소통 기록</h2><p className="muted">{user.name} · 전체 기간 · 문장 저장 기준 (개별 클릭은 집계하지 않음)</p>
+    </div> : <section className="dashboard"><div className="panel-heading"><span aria-hidden="true">🏆</span><div><h2>나의 의사소통 기록</h2><p className="muted">{user.name} · 전체 기간 · 문장 저장 기준 (개별 클릭은 집계하지 않음)</p></div></div>
       {stats && <><div className="metrics"><div>저장한 문장<strong>{stats.sessions}개</strong></div><div>사용한 카드<strong>{stats.selections}장</strong></div></div>
         <h3>카테고리별 사용</h3>{Object.entries(stats.categories).map(([name, count]) => <div className="bar" key={name}><span>{name}</span><meter min="0" max={Math.max(stats.selections, 1)} value={count} /> {count}회</div>)}
         <h3>자주 사용한 카드</h3><div className="categories">{stats.top_cards.slice(0, 8).map(c => <span className="status" key={c.id}>{c.symbol} {c.label} · {c.count}회</span>)}</div>

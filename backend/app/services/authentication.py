@@ -7,19 +7,11 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pymongo import MongoClient
 from pymongo.errors import PyMongoError
+from app.services.database import database as _database, log_crud
 
 SESSION_HOURS = 12
 security = HTTPBearer(auto_error=False)
-
-
-def _database():
-    client = MongoClient(
-        os.environ.get('MONGODB_URI', 'mongodb://127.0.0.1:27017'),
-        serverSelectionTimeoutMS=3000,
-    )
-    return client[os.environ.get('MONGODB_DATABASE', 'pesc_mate')]
 
 
 def _password_hash(password, salt=None):
@@ -44,6 +36,7 @@ def ensure_demo_user():
          '$setOnInsert': {'created_at': datetime.now(timezone.utc)}},
         upsert=True,
     )
+    log_crud('UPDATE', 'users', '데모 계정 동기화')
 
 
 def login(username, password):
@@ -51,6 +44,7 @@ def login(username, password):
         ensure_demo_user()
         database = _database()
         user = database.users.find_one({'username': username})
+        log_crud('READ', 'users', '로그인 계정 조회')
         if not user:
             raise HTTPException(401, '아이디 또는 비밀번호가 올바르지 않습니다.')
         _, candidate = _password_hash(password, user['password_salt'])
@@ -63,6 +57,7 @@ def login(username, password):
             'user_id': str(user['_id']),
             'expires_at': expires_at,
         })
+        log_crud('CREATE', 'auth_sessions', '로그인 세션 생성')
         return {'access_token': token, 'token_type': 'bearer', 'expires_at': expires_at.isoformat(),
                 'user': _public_user(user)}
     except HTTPException:
@@ -78,6 +73,7 @@ def current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
         database = _database()
         session = database.auth_sessions.find_one({'_id': token_hash})
+        log_crud('READ', 'auth_sessions', '로그인 세션 확인')
         now = datetime.now(timezone.utc)
         expires_at = session.get('expires_at') if session else None
         if expires_at and expires_at.tzinfo is None:
@@ -85,8 +81,10 @@ def current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
         if not session or not expires_at or expires_at <= now:
             if session:
                 database.auth_sessions.delete_one({'_id': token_hash})
+                log_crud('DELETE', 'auth_sessions', '만료 세션 삭제')
             raise HTTPException(401, '로그인 시간이 만료되었습니다.', headers={'WWW-Authenticate': 'Bearer'})
         user = database.users.find_one({'_id': session['user_id']})
+        log_crud('READ', 'users', '인증 사용자 조회')
         if not user:
             raise HTTPException(401, '사용자 계정을 찾을 수 없습니다.')
         return _public_user(user)
@@ -100,5 +98,6 @@ def logout(credentials: HTTPAuthorizationCredentials = Depends(security)):
     if credentials:
         try:
             _database().auth_sessions.delete_one({'_id': hashlib.sha256(credentials.credentials.encode()).hexdigest()})
+            log_crud('DELETE', 'auth_sessions', '로그아웃 세션 삭제')
         except PyMongoError as exc:
             raise HTTPException(503, '로그아웃을 처리하지 못했습니다.') from exc

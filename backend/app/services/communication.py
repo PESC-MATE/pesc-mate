@@ -1,11 +1,10 @@
 """Curated PECS cards, rule-based sentences, and MongoDB history."""
 from collections import Counter
 from datetime import datetime, timezone
-import os
 
 from fastapi import HTTPException
-from pymongo import MongoClient
 from pymongo.errors import DuplicateKeyError, PyMongoError
+from app.services.database import database, log_crud
 
 CARDS = [dict(id=k, label=l, symbol=s, category=c) for k, l, s, c in [
     ('me', '나', '🙋', '사람'), ('mom', '엄마', '👩', '사람'),
@@ -22,8 +21,7 @@ INDEX = {card['id']: card for card in CARDS}
 
 
 def _collection():
-    client = MongoClient(os.environ.get('MONGODB_URI', 'mongodb://127.0.0.1:27017'), serverSelectionTimeoutMS=3000)
-    return client[os.environ.get('MONGODB_DATABASE', 'pesc_mate')].communication_sessions
+    return database().communication_sessions
 
 
 def _public(document):
@@ -60,6 +58,7 @@ def save_session(request, user_id):
     try:
         collection = _collection()
         existing = collection.find_one({'_id': request_id, 'user_id': user_id})
+        log_crud('READ', 'communication_sessions', '중복 요청 확인')
         if existing:
             if existing['cards'] != card_ids:
                 raise HTTPException(409, '같은 요청 번호에 다른 카드가 전달되었습니다.')
@@ -67,8 +66,10 @@ def save_session(request, user_id):
         document = {'_id': request_id, 'user_id': user_id, 'cards': card_ids, 'sentence': result, 'created_at': datetime.now(timezone.utc)}
         try:
             collection.insert_one(document)
+            log_crud('CREATE', 'communication_sessions', '문장 기록 저장')
         except DuplicateKeyError:
             existing = collection.find_one({'_id': request_id, 'user_id': user_id})
+            log_crud('READ', 'communication_sessions', '동시 요청 결과 확인')
             if not existing or existing['cards'] != card_ids:
                 raise HTTPException(409, '같은 요청 번호에 다른 카드가 전달되었습니다.')
             return _public(existing)
@@ -82,6 +83,7 @@ def save_session(request, user_id):
 def statistics(user_id):
     try:
         rows = [_public(row) for row in _collection().find({'user_id': user_id}).sort('created_at', -1)]
+        log_crud('READ', 'communication_sessions', '사용자 통계 조회')
     except PyMongoError as exc:
         raise HTTPException(503, 'MongoDB에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.') from exc
     counts = Counter(key for row in rows for key in row['cards'])

@@ -118,7 +118,7 @@ function App() {
     {error && <div role="alert" className="error">{error} <button disabled={busy} onClick={load}>다시 연결</button></div>}
     {!loaded && !error && <p role="status">카드를 불러오는 중입니다…</p>}
     {tab === 'cards' ? <div className="communication-layout">
-      <section className="recommend-panel"><div className="panel-heading"><span aria-hidden="true">⭐</span><div><h2>자주 쓰는 카드</h2><p className="muted">나를 위한 추천</p></div></div><div className="cards recommendations">{recommended.map(tile)}</div></section>
+      <section className="recommend-panel"><div className="stage-title"><span className="stage-back" aria-hidden="true">‹‹</span><div><strong>오늘의 추천 카드</strong><i aria-hidden="true"><b></b><b></b><b></b></i><p>자주 쓰는 카드를 골라 문장을 시작해요</p></div><span className="stage-helper" aria-hidden="true">🌱</span></div><div className="cards recommendations">{recommended.map(tile)}</div><div className="stage-ground" aria-hidden="true">▲　▲　　▲　　　▲　▲</div></section>
       <div className="workspace"><section><div className="section-title"><h2>무엇을 말하고 싶나요?</h2><input aria-label="카드 검색" placeholder="카드 이름 검색" value={search} onChange={e => setSearch(e.target.value)} /></div>
         <div className="categories" aria-label="카테고리">{['전체', ...new Set(cards.map(c => c.category))].map(c => <button key={c} aria-pressed={category === c} className={category === c ? 'active' : ''} onClick={() => setCategory(c)}>{c}</button>)}</div>
         <div className="cards">{cards.filter(c => (category === '전체' || c.category === category) && c.label.includes(search.trim())).map(tile)}</div>

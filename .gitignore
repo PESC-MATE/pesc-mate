@@ -7,7 +7,7 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
-
+reference/
 # Environment variables
 .env
 .env.*

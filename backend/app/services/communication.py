@@ -1,6 +1,6 @@
 """Curated PECS cards, rule-based sentences, and MongoDB history."""
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
 from pymongo.errors import DuplicateKeyError, PyMongoError
@@ -80,10 +80,15 @@ def save_session(request, user_id):
         raise HTTPException(503, 'MongoDB에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.') from exc
 
 
-def statistics(user_id):
+def statistics(user_id, days=None, now=None):
+    query = {'user_id': user_id}
+    if days is not None:
+        reference_time = now or datetime.now(timezone.utc)
+        query['created_at'] = {'$gte': reference_time - timedelta(days=days)}
     try:
-        rows = [_public(row) for row in _collection().find({'user_id': user_id}).sort('created_at', -1)]
-        log_crud('READ', 'communication_sessions', '사용자 통계 조회')
+        rows = [_public(row) for row in _collection().find(query).sort('created_at', -1)]
+        period = f'최근 {days}일' if days is not None else '전체 기간'
+        log_crud('READ', 'communication_sessions', f'사용자 통계 조회 ({period})')
     except PyMongoError as exc:
         raise HTTPException(503, 'MongoDB에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.') from exc
     counts = Counter(key for row in rows for key in row['cards'])
@@ -93,4 +98,4 @@ def statistics(user_id):
             categories[INDEX[key]['category']] += count
     return dict(sessions=len(rows), selections=sum(counts.values()),
                 top_cards=[INDEX[key] | {'count': count} for key, count in counts.most_common() if key in INDEX],
-                categories=dict(categories), recent=rows[:10])
+                categories=dict(categories), recent=rows[:10], period_days=days)

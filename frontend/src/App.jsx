@@ -18,13 +18,17 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [stats, setStats] = useState(null);
+  const [period, setPeriod] = useState('all');
+  const [statsBusy, setStatsBusy] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
+
+  const dashboardPath = (value = period) => value === 'all' ? '/dashboard' : `/dashboard?days=${value}`;
 
   async function load() {
     setError('');
     try {
-      const [all, rec, dashboard] = await Promise.all([request('/cards'), request('/recommendations'), request('/dashboard')]);
+      const [all, rec, dashboard] = await Promise.all([request('/cards'), request('/recommendations'), request(dashboardPath())]);
       setCards(all); setRecommended(rec); setStats(dashboard); setLoaded(true);
     } catch (e) {
       if (e.status === 401) { setToken(null); setUser(null); setLoaded(false); setError('로그인이 만료되었습니다. 다시 로그인해 주세요.'); }
@@ -81,7 +85,7 @@ function App() {
       const result = await request('/sentences', { method: 'POST', body: JSON.stringify({ cards: board.map(c => c.id), request_id: requestId }) });
       setText(result.sentence);
       try {
-        const [rec, dashboard] = await Promise.all([request('/recommendations'), request('/dashboard')]);
+        const [rec, dashboard] = await Promise.all([request('/recommendations'), request(dashboardPath())]);
         setRecommended(rec); setStats(dashboard);
       } catch { setError('문장은 저장되었습니다. 통계 갱신은 다시 연결을 눌러 주세요.'); }
     } catch (e) { setError(e.message); }
@@ -97,6 +101,12 @@ function App() {
     utterance.onend = () => setSpeaking(false);
     utterance.onerror = (event) => { setSpeaking(false); if (!['canceled', 'interrupted'].includes(event.error)) setError('음성을 재생하지 못했습니다. 기기의 한국어 음성 설정을 확인해 주세요.'); };
     setSpeaking(true); window.speechSynthesis.speak(utterance);
+  }
+  async function changePeriod(value) {
+    setPeriod(value); setStatsBusy(true); setError('');
+    try { setStats(await request(dashboardPath(value))); }
+    catch (e) { setError(e.message); }
+    finally { setStatsBusy(false); }
   }
   function tile(card) {
     return <button className="card" key={card.id} disabled={busy} onClick={() => add(card)}><span aria-hidden="true">{card.symbol}</span>{card.label}</button>;
@@ -132,11 +142,13 @@ function App() {
         <div className="actions"><button className="primary" disabled={!text || busy || speaking} onClick={speak}>🔊 읽어주기</button><button disabled={!speaking} onClick={() => { window.speechSynthesis.cancel(); setSpeaking(false); }}>중지</button></div>
         <p className="muted">현재는 규칙 기반 문장 생성을 사용합니다. 지원하지 않는 조합은 선택한 단어를 순서대로 표시합니다.</p>
       </section></div>
-    </div> : <section className="dashboard"><div className="panel-heading"><span aria-hidden="true">🏆</span><div><h2>나의 의사소통 기록</h2><p className="muted">{user.name} · 전체 기간 · 문장 저장 기준 (개별 클릭은 집계하지 않음)</p></div></div>
-      {stats && <><div className="metrics"><div>저장한 문장<strong>{stats.sessions}개</strong></div><div>사용한 카드<strong>{stats.selections}장</strong></div></div>
+    </div> : <section className="dashboard"><div className="panel-heading"><span aria-hidden="true">🏆</span><div><h2>나의 의사소통 기록</h2><p className="muted">{user.name} · {period === 'all' ? '전체 기간' : `최근 ${period}일`} · 문장 저장 기준</p></div></div>
+      <div className="period-filter" aria-label="조회 기간">{[['7', '최근 7일'], ['30', '최근 30일'], ['all', '전체']].map(([value, label]) => <button key={value} className={period === value ? 'active' : ''} aria-pressed={period === value} disabled={statsBusy} onClick={() => changePeriod(value)}>{label}</button>)}</div>
+      {statsBusy && <p className="muted" role="status">통계를 불러오는 중입니다…</p>}
+      {stats && <div className={statsBusy ? 'stats-content loading' : 'stats-content'}><div className="metrics"><div>저장한 문장<strong>{stats.sessions}개</strong></div><div>사용한 카드<strong>{stats.selections}장</strong></div></div>
         <h3>카테고리별 사용</h3>{Object.entries(stats.categories).map(([name, count]) => <div className="bar" key={name}><span>{name}</span><meter min="0" max={Math.max(stats.selections, 1)} value={count} /> {count}회</div>)}
         <h3>자주 사용한 카드</h3><div className="categories">{stats.top_cards.slice(0, 8).map(c => <span className="status" key={c.id}>{c.symbol} {c.label} · {c.count}회</span>)}</div>
-        <h3>최근 문장</h3>{!stats.recent.length ? <p className="empty">아직 기록이 없어요. 첫 문장을 만들어 보세요.</p> : <ul className="history">{stats.recent.map(r => <li key={r.id}><span>{r.sentence}</span><time>{new Date(r.created_at).toLocaleString('ko-KR')}</time></li>)}</ul>}</>}
+        <h3>최근 문장</h3>{!stats.recent.length ? <p className="empty">선택한 기간에 기록이 없어요.</p> : <ul className="history">{stats.recent.map(r => <li key={r.id}><span>{r.sentence}</span><time>{new Date(r.created_at).toLocaleString('ko-KR')}</time></li>)}</ul>}</div>}
     </section>}
     <footer>실행용 프로토타입 · 실제 개인정보를 입력하지 마세요.</footer>
   </main>;

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from uuid import UUID
 from app.services.communication import CARDS, save_session, statistics
@@ -55,5 +55,5 @@ def recommendations(user=Depends(current_user)):
 
 
 @api_router.get('/dashboard')
-def dashboard(user=Depends(current_user)):
-    return statistics(user['id'])
+def dashboard(days: int | None = Query(default=None, ge=1, le=365), user=Depends(current_user)):
+    return statistics(user['id'], days=days)

@@ -1,5 +1,6 @@
 import unittest
 from copy import deepcopy
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 from uuid import uuid4
 from fastapi import HTTPException
@@ -26,8 +27,13 @@ class Collection:
             raise DuplicateKeyError('duplicate')
         self.documents[document['_id']] = deepcopy(document)
     def find(self, query):
-        return Cursor(deepcopy([document for document in self.documents.values()
-                               if all(document.get(key) == value for key, value in query.items())]))
+        def matches(document):
+            for key, value in query.items():
+                if isinstance(value, dict) and '$gte' in value:
+                    if document.get(key) < value['$gte']: return False
+                elif document.get(key) != value: return False
+            return True
+        return Cursor(deepcopy([document for document in self.documents.values() if matches(document)]))
 
 
 class CommunicationTests(unittest.TestCase):
@@ -65,6 +71,18 @@ class CommunicationTests(unittest.TestCase):
         result = save_session(SentenceRequest(cards=['water', 'no', 'water'], request_id=uuid4()), 'demo')
         self.assertEqual(result['sentence'], '물 · 싫어요 · 물')
         self.assertEqual(statistics('demo')['top_cards'][0]['count'], 2)
+
+    def test_statistics_can_filter_recent_period(self):
+        now = datetime(2026, 9, 8, tzinfo=timezone.utc)
+        self.collection.documents = {
+            'recent': {'_id': 'recent', 'user_id': 'demo', 'cards': ['water'],
+                       'sentence': '물을 주세요.', 'created_at': now - timedelta(days=2)},
+            'old': {'_id': 'old', 'user_id': 'demo', 'cards': ['rice'],
+                    'sentence': '밥을 주세요.', 'created_at': now - timedelta(days=40)},
+        }
+        self.assertEqual(statistics('demo', days=7, now=now)['sessions'], 1)
+        self.assertEqual(statistics('demo', days=30, now=now)['sessions'], 1)
+        self.assertEqual(statistics('demo', now=now)['sessions'], 2)
 
 
 if __name__ == '__main__': unittest.main()

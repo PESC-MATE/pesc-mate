@@ -170,6 +170,10 @@ button.primary:hover:not(:disabled), button.active:hover:not(:disabled) { backgr
 input { border-color: #d6e8ef; }
 .sentence { background: #e8f8f5; border-color: #c8ebe4; }
 .dashboard { background: linear-gradient(150deg, #f8f5ff, #edf8ff); }
+.period-filter { display: flex; gap: 8px; justify-content: flex-end; margin: -4px 0 18px; }
+.period-filter button { min-height: 38px; padding: 7px 14px; }
+.stats-content { transition: opacity .15s; }
+.stats-content.loading { opacity: .45; pointer-events: none; }
 .metrics > div { border-color: #d8d0f6; }
 .metrics > div:nth-child(2) { border-color: #b5e5dd; }
 .metrics strong { color: #7e70d5; }

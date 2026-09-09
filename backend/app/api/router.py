@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 from uuid import UUID
 from app.services.communication import CARDS, save_session, statistics
 from app.services.authentication import current_user, dashboard_user, linked_users, login, logout, register, security
+from app.services.model import status as model_status
 
 api_router = APIRouter()
 
@@ -11,6 +12,11 @@ api_router = APIRouter()
 @api_router.get("/health", tags=["health"])
 async def health_check() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@api_router.get('/model/status', tags=['모델'])
+def get_model_status(user=Depends(current_user)):
+    return model_status()
 
 
 class SentenceRequest(BaseModel):
@@ -58,6 +64,7 @@ class CommunicationSessionResponse(BaseModel):
     user_id: str
     cards: list[str]
     sentence: str
+    generation_source: str | None = None
     created_at: datetime
 
 

@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException
 from pymongo.errors import DuplicateKeyError, PyMongoError
 from app.services.database import database, log_crud
+from app.services.model import generate_sentence
 
 CARDS = [dict(id=k, label=l, symbol=s, category=c, image_index=index) for index, (k, l, s, c) in enumerate([
     ('me', '나', '🙋', '사람'), ('mom', '엄마', '👩', '사람'),
@@ -53,7 +54,8 @@ def sentence(ids):
 
 def save_session(request, user_id):
     card_ids = list(request.cards)
-    result = sentence(card_ids)
+    fallback = sentence(card_ids)
+    result, generation_source = generate_sentence([INDEX[key]['label'] for key in card_ids], fallback)
     request_id = str(request.request_id)
     try:
         collection = _collection()
@@ -63,7 +65,8 @@ def save_session(request, user_id):
             if existing['cards'] != card_ids:
                 raise HTTPException(409, '같은 요청 번호에 다른 카드가 전달되었습니다.')
             return _public(existing)
-        document = {'_id': request_id, 'user_id': user_id, 'cards': card_ids, 'sentence': result, 'created_at': datetime.now(timezone.utc)}
+        document = {'_id': request_id, 'user_id': user_id, 'cards': card_ids, 'sentence': result,
+                    'generation_source': generation_source, 'created_at': datetime.now(timezone.utc)}
         try:
             collection.insert_one(document)
             log_crud('CREATE', 'communication_sessions', '문장 기록 저장')

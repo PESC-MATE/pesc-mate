@@ -24,6 +24,7 @@ function App() {
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState('cards');
   const [text, setText] = useState('');
+  const [generationSource, setGenerationSource] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -97,7 +98,7 @@ function App() {
 
   function updateBoard(next) {
     window.speechSynthesis?.cancel(); setSpeaking(false);
-    setBoard(next); setText(''); setRequestId(crypto.randomUUID());
+    setBoard(next); setText(''); setGenerationSource(''); setRequestId(crypto.randomUUID());
   }
   function add(card) {
     if (board.length >= 12) { setError('카드는 최대 12장까지 선택할 수 있어요.'); return; }
@@ -113,6 +114,7 @@ function App() {
     try {
       const result = await request('/sentences', { method: 'POST', body: JSON.stringify({ cards: board.map(c => c.id), request_id: requestId }) });
       setText(result.sentence);
+      setGenerationSource(result.generation_source || 'rule');
       try {
         const [rec, dashboard] = await Promise.all([request('/recommendations'), request(dashboardPath())]);
         setRecommended(rec); setStats(dashboard);
@@ -188,7 +190,7 @@ function App() {
         {!board.length && <p className="empty">왼쪽 카드를 눌러 보세요.<br />나 → 물 → 마시다</p>}
         <ol>{board.map((c, i) => <li key={`${c.id}-${i}`}><span>{c.symbol} {c.label}</span><div><button aria-label={`${i + 1}번째 카드 앞으로`} disabled={i === 0 || busy} onClick={() => move(i, -1)}>←</button><button aria-label={`${i + 1}번째 카드 뒤로`} disabled={i === board.length - 1 || busy} onClick={() => move(i, 1)}>→</button><button aria-label={`${i + 1}번째 카드 삭제`} disabled={busy} onClick={() => updateBoard(board.filter((_, n) => n !== i))}>×</button></div></li>)}</ol>
         <button className="primary full" disabled={!board.length || busy} onClick={generate}>{busy ? '문장을 만드는 중…' : '문장 만들기 · 저장'}</button>
-        <div className="sentence" aria-live="polite">{text || '만든 문장이 여기에 표시돼요.'}</div>
+        <div className="sentence" aria-live="polite">{text || '만든 문장이 여기에 표시돼요.'}{text && <small className={`source-badge ${generationSource}`}>{generationSource === 'ollama' ? 'Qwen · Ollama 생성' : '규칙 기반 생성'}</small>}</div>
         <div className="actions"><button className="primary" disabled={!text || busy || speaking} onClick={speak}>🔊 읽어주기</button><button disabled={!speaking} onClick={() => { window.speechSynthesis.cancel(); setSpeaking(false); }}>중지</button></div>
         <p className="muted">현재는 규칙 기반 문장 생성을 사용합니다. 지원하지 않는 조합은 선택한 단어를 순서대로 표시합니다.</p>
       </section></div>

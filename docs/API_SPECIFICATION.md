@@ -18,7 +18,7 @@ lang: ko-KR
 | API 자동 문서 | `/docs` |
 | OpenAPI JSON | `/openapi.json` |
 
-본 명세서는 현재 구현된 API를 기준으로 한다. Qwen 모델 기능은 비활성화되어 있으며 문장은 서버의 규칙으로 생성된다.
+본 명세서는 현재 구현된 API를 기준으로 한다. Ollama의 `qwen2.5:0.5b`로 문장을 생성하며, 모델 장애나 제한 시간 초과 시 서버 규칙 문장으로 자동 전환한다.
 
 # 2. 공통 규칙
 
@@ -70,6 +70,7 @@ Authorization: Bearer {access_token}
 |---|---|---|---|---|
 | 시스템 | GET | `/` | 불필요 | API 기본 응답 |
 | 시스템 | GET | `/api/health` | 불필요 | 서버 상태 확인 |
+| 모델 | GET | `/api/model/status` | 필요 | Ollama 사용 설정과 모델 이름 조회 |
 | 인증 | POST | `/api/auth/login` | 불필요 | 로그인 및 세션 생성 |
 | 인증 | POST | `/api/auth/register` | 불필요 | 일반 사용자 가입 및 로그인 |
 | 인증 | GET | `/api/auth/me` | 필요 | 현재 사용자 조회 |
@@ -131,6 +132,7 @@ Authorization: Bearer {access_token}
 | `user_id` | string | 예 | 기록 소유 사용자 ID |
 | `cards` | string array | 예 | 선택 순서가 보존된 카드 ID 목록 |
 | `sentence` | string | 예 | 생성된 한국어 문장 |
+| `generation_source` | string | 아니요 | `ollama` 또는 `rule` |
 | `created_at` | ISO 8601 string | 예 | 생성 시각 |
 
 ```json
@@ -554,6 +556,6 @@ DB CRUD | READ | communication_sessions | 사용자 통계 조회 (최근 7일)
 2. 기본 데모 계정은 개발·시연용이며 운영 배포 전에 교체해야 한다.
 3. MongoDB 자체 인증은 현재 개발 구성에 적용되지 않았다.
 4. 카드 등록·수정·삭제 API는 구현되지 않았다.
-5. Qwen 문장 생성 API는 비활성화되어 있다.
+5. Ollama가 실행되지 않거나 모델 응답이 60초를 초과하면 규칙 기반 문장을 사용한다.
 6. 음성 출력은 프런트엔드의 Web Speech API로 처리하므로 백엔드 TTS API는 없다.
 7. `/api/health`는 백엔드 상태만 반환하며 MongoDB 준비 상태를 응답에 포함하지 않는다.

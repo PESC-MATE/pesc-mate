@@ -72,6 +72,8 @@ ol li { display: flex; justify-content: space-between; align-items: center; gap:
 ol li button { min-height: 34px; padding: 5px 9px; margin-left: 3px; border-width: 1px; }
 .full { width: 100%; }
 .sentence { background: #dcf7f2; border: 3px solid #b7eadf; border-radius: 18px; padding: 18px; margin: 16px 0; min-height: 80px; font-size: 1.12rem; overflow-wrap: anywhere; }
+.source-badge { display: block; width: max-content; margin-top: 12px; padding: 5px 9px; border-radius: 999px; background: #edf0f3; color: #697985; }
+.source-badge.ollama { background: #dff4e8; color: #33745a; }
 .empty { color: #9a8257; text-align: center; padding: 28px 8px; line-height: 1.8; }
 .error { background: #fff0e7; border: 2px solid #ffbd8d; padding: 13px 16px; border-radius: 16px; margin-bottom: 16px; }
 small { font-family: "Malgun Gothic", sans-serif; font-size: .75rem; color: #9a8257; }

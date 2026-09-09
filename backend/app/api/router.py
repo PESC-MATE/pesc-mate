@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from uuid import UUID
 from app.services.communication import CARDS, save_session, statistics
-from app.services.authentication import current_user, dashboard_user, linked_users, login, logout, security
+from app.services.authentication import current_user, dashboard_user, linked_users, login, logout, register, security
 
 api_router = APIRouter()
 
@@ -21,6 +21,12 @@ class SentenceRequest(BaseModel):
 class LoginRequest(BaseModel):
     username: str = Field(min_length=1, max_length=64)
     password: str = Field(min_length=1, max_length=128)
+
+
+class RegisterRequest(BaseModel):
+    username: str = Field(pattern=r'^[A-Za-z0-9_-]+$', min_length=4, max_length=32)
+    password: str = Field(min_length=8, max_length=128)
+    name: str = Field(min_length=1, max_length=30)
 
 
 class UserResponse(BaseModel):
@@ -73,6 +79,14 @@ def require_communicator(user):
 @api_router.post('/auth/login', response_model=LoginResponse, tags=['인증'])
 def authenticate(request: LoginRequest):
     return login(request.username.strip(), request.password)
+
+
+@api_router.post('/auth/register', response_model=LoginResponse, status_code=201, tags=['인증'])
+def create_account(request: RegisterRequest):
+    name = request.name.strip()
+    if not name:
+        raise HTTPException(422, '이름을 입력해 주세요.')
+    return register(request.username.strip(), request.password, name)
 
 
 @api_router.get('/auth/me', response_model=UserResponse, tags=['인증'])

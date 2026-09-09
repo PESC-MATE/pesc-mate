@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pymongo.errors import PyMongoError
+from pymongo.errors import DuplicateKeyError, PyMongoError
 from app.services.database import database as _database, log_crud
 
 SESSION_HOURS = 12
@@ -78,6 +78,32 @@ def login(username, password):
         raise
     except PyMongoError as exc:
         raise HTTPException(503, '로그인 저장소에 연결하지 못했습니다.') from exc
+
+
+def register(username, password, name):
+    try:
+        database = _database()
+        if database.users.find_one({'username': username}):
+            log_crud('READ', 'users', '회원가입 아이디 중복 확인')
+            raise HTTPException(409, '이미 사용 중인 아이디입니다.')
+        salt, password_hash = _password_hash(password)
+        database.users.insert_one({
+            '_id': username,
+            'username': username,
+            'name': name,
+            'role': 'user',
+            'password_salt': salt,
+            'password_hash': password_hash,
+            'created_at': datetime.now(timezone.utc),
+        })
+        log_crud('CREATE', 'users', '일반 사용자 회원가입')
+        return login(username, password)
+    except DuplicateKeyError as exc:
+        raise HTTPException(409, '이미 사용 중인 아이디입니다.') from exc
+    except HTTPException:
+        raise
+    except PyMongoError as exc:
+        raise HTTPException(503, '회원가입 정보를 저장하지 못했습니다.') from exc
 
 
 def current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):

@@ -8,6 +8,9 @@ function App() {
   const [authReady, setAuthReady] = useState(false);
   const [username, setUsername] = useState('demo');
   const [password, setPassword] = useState('demo1234');
+  const [authMode, setAuthMode] = useState('login');
+  const [name, setName] = useState('');
+  const [passwordConfirm, setPasswordConfirm] = useState('');
   const [cards, setCards] = useState([]);
   const [recommended, setRecommended] = useState([]);
   const [board, setBoard] = useState([]);
@@ -66,9 +69,13 @@ function App() {
   }, []);
 
   async function handleLogin(event) {
-    event.preventDefault(); setBusy(true); setError('');
+    event.preventDefault();
+    if (authMode === 'register' && password !== passwordConfirm) { setError('비밀번호가 일치하지 않습니다.'); return; }
+    setBusy(true); setError('');
     try {
-      const result = await request('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) });
+      const path = authMode === 'register' ? '/auth/register' : '/auth/login';
+      const body = authMode === 'register' ? { username, password, name } : { username, password };
+      const result = await request(path, { method: 'POST', body: JSON.stringify(body) });
       setToken(result.access_token); setUser(result.user);
       await load(result.user);
     } catch (e) { setError(e.message); }
@@ -143,13 +150,17 @@ function App() {
   if (!authReady) return <main className="login-page"><p role="status">로그인 정보를 확인하는 중입니다…</p></main>;
   if (!user) return <main className="login-page"><section className="login-card">
     <div className="login-mascot" aria-hidden="true">💬</div><p className="eyebrow">그림으로 전하는 나의 이야기</p><h1>PESC MATE</h1>
-    <h2>로그인</h2><p className="muted">내 카드 기록과 추천을 불러옵니다.</p>
+    <h2>{authMode === 'login' ? '로그인' : '사용자 가입'}</h2><p className="muted">{authMode === 'login' ? '내 카드 기록과 추천을 불러옵니다.' : 'PECS 사용자 계정을 만들고 바로 시작합니다.'}</p>
     {error && <div role="alert" className="error">{error}</div>}
     <form onSubmit={handleLogin}>
-      <label>아이디<input autoFocus autoComplete="username" value={username} onChange={e => setUsername(e.target.value)} required maxLength="64" /></label>
-      <label>비밀번호<input type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} required maxLength="128" /></label>
-      <button className="primary full" disabled={busy}>{busy ? '로그인 중…' : '로그인'}</button>
-    </form><p className="demo-account">사용자: <code>demo</code> / <code>demo1234</code><br />보호자: <code>caregiver</code> / <code>caregiver1234</code></p>
+      {authMode === 'register' && <label>이름<input autoFocus autoComplete="name" value={name} onChange={e => setName(e.target.value)} required minLength="1" maxLength="30" /></label>}
+      <label>아이디<input autoFocus={authMode === 'login'} autoComplete="username" value={username} onChange={e => setUsername(e.target.value)} required minLength={authMode === 'register' ? 4 : 1} maxLength={authMode === 'register' ? 32 : 64} pattern={authMode === 'register' ? '[A-Za-z0-9_-]+' : undefined} /></label>
+      <label>비밀번호<input type="password" autoComplete={authMode === 'register' ? 'new-password' : 'current-password'} value={password} onChange={e => setPassword(e.target.value)} required minLength={authMode === 'register' ? 8 : 1} maxLength="128" /></label>
+      {authMode === 'register' && <label>비밀번호 확인<input type="password" autoComplete="new-password" value={passwordConfirm} onChange={e => setPasswordConfirm(e.target.value)} required minLength="8" maxLength="128" /></label>}
+      <button className="primary full" disabled={busy}>{busy ? '처리 중…' : authMode === 'login' ? '로그인' : '가입하고 시작하기'}</button>
+    </form>
+    <button className="auth-switch" disabled={busy} onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setError(''); setUsername(''); setPassword(''); setPasswordConfirm(''); setName(''); }}>{authMode === 'login' ? '처음 이용하시나요? 사용자 가입' : '이미 계정이 있나요? 로그인'}</button>
+    {authMode === 'login' && <p className="demo-account">사용자: <code>demo</code> / <code>demo1234</code><br />보호자: <code>caregiver</code> / <code>caregiver1234</code></p>}
   </section></main>;
   return <main className="app">
     <header><div className="brand"><span className="brand-mark" aria-hidden="true">💬</span><div><p className="eyebrow">그림으로 전하는 나의 이야기</p><h1>PESC MATE</h1></div></div><div className="account"><span className="profile-avatar" aria-hidden="true">😊</span><span className="status">{user.name} · {loaded ? '연결됨' : '연결 대기'}</span><button onClick={handleLogout} disabled={busy}>로그아웃</button></div></header>

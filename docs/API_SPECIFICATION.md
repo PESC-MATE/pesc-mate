@@ -71,6 +71,7 @@ Authorization: Bearer {access_token}
 | 시스템 | GET | `/` | 불필요 | API 기본 응답 |
 | 시스템 | GET | `/api/health` | 불필요 | 서버 상태 확인 |
 | 인증 | POST | `/api/auth/login` | 불필요 | 로그인 및 세션 생성 |
+| 인증 | POST | `/api/auth/register` | 불필요 | 일반 사용자 가입 및 로그인 |
 | 인증 | GET | `/api/auth/me` | 필요 | 현재 사용자 조회 |
 | 인증 | POST | `/api/auth/logout` | 필요 | 전달된 토큰의 세션 삭제 |
 | 보호자 | GET | `/api/care/linked-users` | 필요 | 보호자에게 연결된 사용자 조회 |
@@ -229,7 +230,27 @@ POST /api/auth/login
 - `422`: 아이디·비밀번호 누락 또는 길이 위반
 - `503`: 로그인 저장소 연결 실패
 
-## 6.2 현재 사용자 조회
+## 6.2 사용자 가입
+
+```http
+POST /api/auth/register
+Content-Type: application/json
+```
+
+영문, 숫자, `_`, `-`로 구성된 4~32자 아이디와 8자 이상 비밀번호,
+1~30자 이름으로 일반 사용자 계정을 만든다. 성공하면 로그인과 같은 세션 정보를 반환한다.
+
+### 성공 응답: 201 Created
+
+응답 형식은 `LoginResponse`이다.
+
+### 오류 응답
+
+- `409`: 이미 사용 중인 아이디
+- `422`: 입력 형식 또는 길이가 올바르지 않음
+- `503`: MongoDB 연결 실패
+
+## 6.3 현재 사용자 조회
 
 ```http
 GET /api/auth/me
@@ -245,7 +266,7 @@ Authorization: Bearer {access_token}
 - `401`: 토큰 누락, 유효하지 않은 토큰, 세션 만료 또는 사용자 없음
 - `503`: 로그인 저장소 연결 실패
 
-## 6.3 로그아웃
+## 6.4 로그아웃
 
 ```http
 POST /api/auth/logout
@@ -262,7 +283,7 @@ Authorization: Bearer {access_token}  # 토큰이 있을 때
 
 - `503`: 로그인 저장소 연결 실패
 
-## 6.4 보호 대상 사용자 조회
+## 6.5 보호 대상 사용자 조회
 
 ```http
 GET /api/care/linked-users
@@ -523,7 +544,7 @@ DB CRUD | READ | communication_sessions | 사용자 통계 조회 (최근 7일)
 
 # 13. 현재 제약사항
 
-1. 회원가입과 비밀번호 변경 API는 구현되지 않았다.
+1. 비밀번호 변경 및 계정 탈퇴 API는 구현되지 않았다.
 2. 기본 데모 계정은 개발·시연용이며 운영 배포 전에 교체해야 한다.
 3. MongoDB 자체 인증은 현재 개발 구성에 적용되지 않았다.
 4. 카드 등록·수정·삭제 API는 구현되지 않았다.

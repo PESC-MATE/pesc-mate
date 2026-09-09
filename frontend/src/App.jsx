@@ -3,6 +3,12 @@ import { useEffect, useState } from "react";
 import { hasToken, request, setToken } from "./services/api";
 import cardSprite from "./assets/cards/pecs-card-sprite.png";
 
+const CARD_META = Object.fromEntries([
+  ['me', '나'], ['mom', '엄마'], ['water', '물'], ['rice', '밥'], ['apple', '사과'], ['milk', '우유'],
+  ['drink', '마시다'], ['eat', '먹다'], ['go', '가다'], ['rest', '쉬다'], ['play', '놀다'], ['help', '도와주세요'],
+  ['toilet', '화장실'], ['home', '집'], ['happy', '좋아요'], ['hurt', '아파요'], ['no', '싫어요'], ['yes', '네'],
+].map(([id, label], image_index) => [id, { id, label, image_index }]));
+
 function App() {
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(false);
@@ -139,11 +145,15 @@ function App() {
     catch (e) { setError(e.message); }
     finally { setStatsBusy(false); }
   }
+  function artStyle(card) {
+    return { backgroundImage: `url(${cardSprite})`, backgroundPosition: `${(card.image_index % 6) * 20}% ${Math.floor(card.image_index / 6) * 50}%` };
+  }
+  function cardPicture(card, className = 'mini-card') {
+    return <span key={card.id} className={className} title={card.label} aria-label={card.label} role="img" style={artStyle(card)} />;
+  }
   function tile(card) {
-    const x = (card.image_index % 6) * 20;
-    const y = Math.floor(card.image_index / 6) * 50;
     return <button className="card" key={card.id} disabled={busy} onClick={() => add(card)}>
-      <span className="card-art" role="img" aria-label={`${card.label} 그림`} style={{ backgroundImage: `url(${cardSprite})`, backgroundPosition: `${x}% ${y}%` }} />
+      <span className="card-art" role="img" aria-label={`${card.label} 그림`} style={artStyle(card)} />
       <strong>{card.label}</strong>{card.reason && <small>{card.reason}</small>}
     </button>;
   }
@@ -187,10 +197,17 @@ function App() {
       <div className="period-filter" aria-label="조회 기간">{[['7', '최근 7일'], ['30', '최근 30일'], ['all', '전체']].map(([value, label]) => <button key={value} className={period === value ? 'active' : ''} aria-pressed={period === value} disabled={statsBusy} onClick={() => changePeriod(value)}>{label}</button>)}</div>
       {statsBusy && <p className="muted" role="status">통계를 불러오는 중입니다…</p>}
       {user.role === 'caregiver' && loaded && !selectedUser && <p className="empty">연결된 사용자가 없습니다.</p>}
-      {stats && <div className={statsBusy ? 'stats-content loading' : 'stats-content'}><div className="metrics"><div>저장한 문장<strong>{stats.sessions}개</strong></div><div>사용한 카드<strong>{stats.selections}장</strong></div></div>
+      {stats && <div className={statsBusy ? 'stats-content loading' : 'stats-content'}>
+        {user.role === 'caregiver' && <><div className="guardian-summary">
+          <div><span>오늘 문장</span><strong>{stats.today_sessions}개</strong></div><div><span>오늘 사용 카드</span><strong>{stats.today_selections}장</strong></div>
+          <div><span>주요 감정</span><strong>{stats.primary_emotion?.label || '기록 없음'}</strong></div><div><span>마지막 표현</span><strong>{stats.last_activity ? new Date(stats.last_activity).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) : '기록 없음'}</strong></div>
+        </div><div className="guardian-grid"><article className="activity-panel"><h3>최근 7일 의사소통</h3><div className="activity-chart">{stats.daily_activity.map(day => { const max = Math.max(...stats.daily_activity.map(item => item.sessions), 1); return <div key={day.date}><span className="activity-value">{day.sessions}</span><i style={{ height: `${Math.max((day.sessions / max) * 100, 4)}%` }}></i><time>{new Date(`${day.date}T00:00:00`).toLocaleDateString('ko-KR', { weekday: 'short' })}</time></div>; })}</div></article>
+          <article className="attention-panel"><h3>확인이 필요한 표현</h3>{stats.attention.length ? stats.attention.map(item => <div className="attention-item" key={item.id}>{cardPicture(item)}<span><strong>{item.label} · {item.count}회</strong><small>최근 {new Date(item.last_used_at).toLocaleString('ko-KR')}</small></span></div>) : <p className="muted">선택한 기간에 확인이 필요한 표현이 없어요.</p>}</article>
+        </div></>}
+        <div className="metrics"><div>저장한 문장<strong>{stats.sessions}개</strong></div><div>사용한 카드<strong>{stats.selections}장</strong></div></div>
         <h3>카테고리별 사용</h3>{Object.entries(stats.categories).map(([name, count]) => <div className="bar" key={name}><span>{name}</span><meter min="0" max={Math.max(stats.selections, 1)} value={count} /> {count}회</div>)}
         <h3>자주 사용한 카드</h3><div className="categories">{stats.top_cards.slice(0, 8).map(c => <span className="status" key={c.id}>{c.symbol} {c.label} · {c.count}회</span>)}</div>
-        <h3>최근 문장</h3>{!stats.recent.length ? <p className="empty">선택한 기간에 기록이 없어요.</p> : <ul className="history">{stats.recent.map(r => <li key={r.id}><span>{r.sentence}</span><time>{new Date(r.created_at).toLocaleString('ko-KR')}</time></li>)}</ul>}</div>}
+        <h3>{user.role === 'caregiver' ? '최근 의사소통 타임라인' : '최근 문장'}</h3>{!stats.recent.length ? <p className="empty">선택한 기간에 기록이 없어요.</p> : <ul className="history">{stats.recent.map(r => <li key={r.id}>{user.role === 'caregiver' && <div className="history-cards">{r.cards.map((id, index) => cardPicture({ ...(CARD_META[id] || { id, label: id, image_index: 0 }), id: `${id}-${index}` }))}</div>}<span>{r.sentence}</span><time>{new Date(r.created_at).toLocaleString('ko-KR')}</time></li>)}</ul>}</div>}
     </section>}
     <footer>실행용 프로토타입 · 실제 개인정보를 입력하지 마세요.</footer>
   </main>;

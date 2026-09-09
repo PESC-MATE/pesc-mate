@@ -81,9 +81,9 @@ def save_session(request, user_id):
 
 
 def statistics(user_id, days=None, now=None):
+    reference_time = now or datetime.now(timezone.utc)
     query = {'user_id': user_id}
     if days is not None:
-        reference_time = now or datetime.now(timezone.utc)
         query['created_at'] = {'$gte': reference_time - timedelta(days=days)}
     try:
         rows = [_public(row) for row in _collection().find(query).sort('created_at', -1)]
@@ -96,9 +96,31 @@ def statistics(user_id, days=None, now=None):
     for key, count in counts.items():
         if key in INDEX:
             categories[INDEX[key]['category']] += count
+    today = reference_time.date()
+    today_rows = [row for row in rows if datetime.fromisoformat(row['created_at']).date() == today]
+    daily_counts = Counter(datetime.fromisoformat(row['created_at']).date().isoformat() for row in rows)
+    daily_activity = [
+        {'date': (today - timedelta(days=offset)).isoformat(),
+         'sessions': daily_counts[(today - timedelta(days=offset)).isoformat()]}
+        for offset in range(6, -1, -1)
+    ]
+    primary_emotion_key = next((key for key, _ in counts.most_common() if key in {'happy', 'hurt', 'no', 'yes'}), None)
+    primary_emotion = INDEX[primary_emotion_key] if primary_emotion_key else None
+    attention = []
+    for key in ('hurt', 'help', 'no'):
+        matching = [row for row in rows if key in row['cards']]
+        if matching:
+            attention.append(INDEX[key] | {'count': sum(row['cards'].count(key) for row in matching),
+                                           'last_used_at': matching[0]['created_at']})
     return dict(sessions=len(rows), selections=sum(counts.values()),
                 top_cards=[INDEX[key] | {'count': count} for key, count in counts.most_common() if key in INDEX],
-                categories=dict(categories), recent=rows[:10], period_days=days)
+                categories=dict(categories), recent=rows[:10], period_days=days,
+                today_sessions=len(today_rows),
+                today_selections=sum(len(row['cards']) for row in today_rows),
+                primary_emotion=primary_emotion,
+                last_activity=rows[0]['created_at'] if rows else None,
+                daily_activity=daily_activity,
+                attention=attention)
 
 
 def ensure_demo_history(user_id):

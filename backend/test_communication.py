@@ -90,6 +90,21 @@ class CommunicationTests(unittest.TestCase):
         self.assertEqual(statistics('demo', days=30, now=now)['sessions'], 1)
         self.assertEqual(statistics('demo', now=now)['sessions'], 2)
 
+    def test_guardian_summary_contains_daily_and_attention_data(self):
+        now = datetime(2026, 9, 8, 12, tzinfo=timezone.utc)
+        self.collection.documents = {
+            'today': {'_id': 'today', 'user_id': 'demo', 'cards': ['hurt', 'help'],
+                      'sentence': '아파요 · 도와주세요', 'created_at': now - timedelta(hours=1)},
+            'yesterday': {'_id': 'yesterday', 'user_id': 'demo', 'cards': ['happy'],
+                          'sentence': '좋아요', 'created_at': now - timedelta(days=1)},
+        }
+        result = statistics('demo', now=now)
+        self.assertEqual(result['today_sessions'], 1)
+        self.assertEqual(result['today_selections'], 2)
+        self.assertEqual(len(result['daily_activity']), 7)
+        self.assertEqual({item['id'] for item in result['attention']}, {'hurt', 'help'})
+        self.assertEqual(result['primary_emotion']['id'], 'hurt')
+
     def test_demo_history_is_seeded_once(self):
         ensure_demo_history('demo')
         self.assertEqual(statistics('demo')['sessions'], 4)

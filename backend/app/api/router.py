@@ -61,6 +61,16 @@ class CommunicationSessionResponse(BaseModel):
     created_at: datetime
 
 
+class DailyActivityResponse(BaseModel):
+    date: str
+    sessions: int
+
+
+class AttentionResponse(CardResponse):
+    count: int
+    last_used_at: datetime
+
+
 class DashboardResponse(BaseModel):
     sessions: int
     selections: int
@@ -68,6 +78,12 @@ class DashboardResponse(BaseModel):
     categories: dict[str, int]
     recent: list[CommunicationSessionResponse]
     period_days: int | None
+    today_sessions: int
+    today_selections: int
+    primary_emotion: CardResponse | None
+    last_activity: datetime | None
+    daily_activity: list[DailyActivityResponse]
+    attention: list[AttentionResponse]
 
 
 def require_communicator(user):

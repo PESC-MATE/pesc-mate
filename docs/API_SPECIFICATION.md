@@ -443,6 +443,12 @@ Authorization: Bearer {access_token}
 | `categories` | object | 카테고리 이름별 사용 횟수 |
 | `recent` | CommunicationSession[] | 최신순 기록 최대 10개 |
 | `period_days` | integer 또는 null | 적용된 기간. 전체 기간이면 `null` |
+| `today_sessions` | integer | 오늘 생성한 문장 수 |
+| `today_selections` | integer | 오늘 선택한 카드 수 |
+| `primary_emotion` | Card 또는 null | 선택 기간에 가장 많이 사용한 감정 카드 |
+| `last_activity` | ISO 8601 또는 null | 가장 최근 의사소통 시각 |
+| `daily_activity` | object[] | 최근 7일 날짜별 문장 수 |
+| `attention` | Card[] | `아파요`, `도와주세요`, `싫어요` 사용 횟수와 최근 시각 |
 
 ```json
 {

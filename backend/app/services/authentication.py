@@ -24,24 +24,36 @@ def _public_user(user):
     return {'id': str(user['_id']), 'username': user['username'], 'name': user['name'], 'role': user['role']}
 
 
-def ensure_demo_user():
-    username = os.environ.get('DEMO_USERNAME', 'demo')
-    password = os.environ.get('DEMO_PASSWORD', 'demo1234')
+def _ensure_user(username, password, name, role):
     salt, password_hash = _password_hash(password)
     database = _database()
     database.users.update_one(
         {'_id': username},
-        {'$set': {'username': username, 'name': '데모 사용자', 'role': 'user',
+        {'$set': {'username': username, 'name': name, 'role': role,
                   'password_salt': salt, 'password_hash': password_hash},
          '$setOnInsert': {'created_at': datetime.now(timezone.utc)}},
         upsert=True,
     )
-    log_crud('UPDATE', 'users', '데모 계정 동기화')
+    log_crud('UPDATE', 'users', f'{role} 데모 계정 동기화')
+
+
+def ensure_demo_users():
+    user_id = os.environ.get('DEMO_USERNAME', 'demo')
+    _ensure_user(user_id, os.environ.get('DEMO_PASSWORD', 'demo1234'), '민준', 'user')
+    caregiver_id = os.environ.get('CAREGIVER_USERNAME', 'caregiver')
+    _ensure_user(caregiver_id, os.environ.get('CAREGIVER_PASSWORD', 'caregiver1234'), '민준 보호자', 'caregiver')
+    _database().caregiver_links.update_one(
+        {'_id': f'{caregiver_id}:{user_id}'},
+        {'$set': {'caregiver_id': caregiver_id, 'user_id': user_id},
+         '$setOnInsert': {'created_at': datetime.now(timezone.utc)}},
+        upsert=True,
+    )
+    log_crud('UPDATE', 'caregiver_links', '데모 사용자 연결 조회')
 
 
 def login(username, password):
     try:
-        ensure_demo_user()
+        ensure_demo_users()
         database = _database()
         user = database.users.find_one({'username': username})
         log_crud('READ', 'users', '로그인 계정 조회')
@@ -58,6 +70,8 @@ def login(username, password):
             'expires_at': expires_at,
         })
         log_crud('CREATE', 'auth_sessions', '로그인 세션 생성')
+        from app.services.communication import ensure_demo_history
+        ensure_demo_history(os.environ.get('DEMO_USERNAME', 'demo'))
         return {'access_token': token, 'token_type': 'bearer', 'expires_at': expires_at.isoformat(),
                 'user': _public_user(user)}
     except HTTPException:
@@ -101,3 +115,34 @@ def logout(credentials: HTTPAuthorizationCredentials = Depends(security)):
             log_crud('DELETE', 'auth_sessions', '로그아웃 세션 삭제')
         except PyMongoError as exc:
             raise HTTPException(503, '로그아웃을 처리하지 못했습니다.') from exc
+
+
+def linked_users(caregiver_id):
+    try:
+        database = _database()
+        links = database.caregiver_links.find({'caregiver_id': caregiver_id})
+        users = []
+        for link in links:
+            linked = database.users.find_one({'_id': link['user_id'], 'role': 'user'})
+            if linked:
+                users.append(_public_user(linked))
+        log_crud('READ', 'caregiver_links', '연결 사용자 조회')
+        return users
+    except PyMongoError as exc:
+        raise HTTPException(503, '연결 사용자 정보를 조회하지 못했습니다.') from exc
+
+
+def dashboard_user(requester, requested_user_id=None):
+    if requester['role'] == 'user':
+        if requested_user_id and requested_user_id != requester['id']:
+            raise HTTPException(403, '다른 사용자의 기록에 접근할 수 없습니다.')
+        return requester['id']
+    if requester['role'] == 'caregiver':
+        available = linked_users(requester['id'])
+        if not available:
+            raise HTTPException(404, '연결된 사용자가 없습니다.')
+        target = requested_user_id or available[0]['id']
+        if target not in {user['id'] for user in available}:
+            raise HTTPException(403, '연결되지 않은 사용자의 기록에 접근할 수 없습니다.')
+        return target
+    raise HTTPException(403, '이용 현황을 조회할 권한이 없습니다.')

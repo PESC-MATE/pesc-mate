@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 from pymongo.errors import DuplicateKeyError
 from app.api.router import SentenceRequest
-from app.services.communication import save_session, statistics
+from app.services.communication import ensure_demo_history, save_session, statistics
 
 
 class Cursor(list):
@@ -34,6 +34,12 @@ class Collection:
                 elif document.get(key) != value: return False
             return True
         return Cursor(deepcopy([document for document in self.documents.values() if matches(document)]))
+    def count_documents(self, query, limit=0):
+        count = len(self.find(query))
+        return min(count, limit) if limit else count
+    def update_one(self, query, update, upsert=False):
+        if query['_id'] not in self.documents and upsert:
+            self.documents[query['_id']] = deepcopy(query | update.get('$setOnInsert', {}))
 
 
 class CommunicationTests(unittest.TestCase):
@@ -83,6 +89,12 @@ class CommunicationTests(unittest.TestCase):
         self.assertEqual(statistics('demo', days=7, now=now)['sessions'], 1)
         self.assertEqual(statistics('demo', days=30, now=now)['sessions'], 1)
         self.assertEqual(statistics('demo', now=now)['sessions'], 2)
+
+    def test_demo_history_is_seeded_once(self):
+        ensure_demo_history('demo')
+        self.assertEqual(statistics('demo')['sessions'], 4)
+        ensure_demo_history('demo')
+        self.assertEqual(statistics('demo')['sessions'], 4)
 
 
 if __name__ == '__main__': unittest.main()

@@ -12,7 +12,7 @@ body::before, body::after {
 }
 body::before { width: 310px; height: 310px; left: -110px; top: -120px; background: #ff8a65; border: 10px solid #a66352; }
 body::after { width: 250px; height: 250px; right: -90px; bottom: -110px; background: #b9dc3d; border: 9px solid #8da82c; }
-button, input { font: inherit; }
+button, input, select { font: inherit; }
 button { cursor: pointer; border: 2px solid #f1d06d; border-radius: 999px; background: #fffdf0; color: #6d4a13; padding: 11px 17px; min-height: 44px; font-weight: 700; transition: transform .15s, box-shadow .15s, background .15s; }
 button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 14px #d7981740; background: #fff8c9; }
 button:disabled { opacity: .45; cursor: not-allowed; }
@@ -53,13 +53,17 @@ section { background: #fffef4e8; border: 4px solid #fff; padding: 22px; border-r
 .card:nth-child(4n+2) { background: #e9fbf5; }
 .card:nth-child(4n+3) { background: #edf7ff; }
 .card:nth-child(4n) { background: #f7eeff; }
-.card > span { font-size: 2.35rem; filter: drop-shadow(0 3px 1px #be8b3a26); }
+.card-art { display: block; width: 100%; aspect-ratio: 1; border-radius: 13px; background-size: 600% 300%; background-repeat: no-repeat; box-shadow: 0 2px 8px #61798924; }
+.card > strong { position: relative; z-index: 1; }
+.card > small { position: relative; z-index: 1; line-height: 1.25; }
 .recommendations { grid-template-columns: 1fr; }
 .recommendations .card { flex-direction: row; justify-content: flex-start; text-align: left; padding: 10px 14px; }
-.recommendations .card > span { font-size: 1.8rem; }
+.recommendations .card > .card-art { flex: 0 0 68px; width: 68px; }
 .recommend-panel { background: linear-gradient(180deg, #fffbd7, #fff3aa); }
 
 input { padding: 11px 15px; border: 2px solid #efd578; border-radius: 999px; background: #fffef7; max-width: 100%; margin-bottom: 14px; }
+.user-picker { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin: -4px 0 14px; color: #607984; font-weight: 700; }
+.user-picker select { min-height: 42px; padding: 8px 38px 8px 14px; border: 2px solid #d6e8ef; border-radius: 999px; background: #fff; color: #52616f; }
 .categories, .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
 .categories button { padding: 8px 14px; min-height: 38px; }
 .board { background: linear-gradient(160deg, #fff, #fff3ca); border-color: #fff9dc; position: sticky; top: 18px; }
@@ -115,7 +119,7 @@ footer { text-align: center; padding: 12px; }
   .recommendations { grid-template-columns: repeat(2, 1fr); }
   .section-title input { width: 100%; }
   .metrics { flex-direction: column; }
-  .card > span { font-size: 2rem; }
+  .card-art { border-radius: 10px; }
 }
 
 /* Main stage: layout adapted from docs/reference/image2.png */
@@ -155,7 +159,8 @@ button.primary:hover:not(:disabled), button.active:hover:not(:disabled) { backgr
 .recommendations .card:nth-child(6n+4) { background: #f0a0b6; }
 .recommendations .card:nth-child(6n+5) { background: #5e9fea; }
 .recommendations .card:nth-child(6n) { background: #8b7ddd; }
-.recommendations .card > span { position: relative; z-index: 1; font-size: 3.2rem; }
+.recommendations .card > .card-art { position: relative; z-index: 1; flex: none; width: min(100%, 124px); }
+.recommendations .card > small { color: #fff; opacity: .9; }
 .recommendations .card:hover:not(:disabled) { background: #55a9ed; transform: translateY(-7px); box-shadow: 0 10px 20px #6f93ab36; }
 
 .workspace { grid-template-columns: minmax(420px, 1.35fr) minmax(310px, .75fr); margin-top: 18px; }

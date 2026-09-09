@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { hasToken, request, setToken } from "./services/api";
+import cardSprite from "./assets/cards/pecs-card-sprite.png";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -22,12 +23,27 @@ function App() {
   const [statsBusy, setStatsBusy] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
+  const [linkedUsers, setLinkedUsers] = useState([]);
+  const [selectedUser, setSelectedUser] = useState(null);
 
-  const dashboardPath = (value = period) => value === 'all' ? '/dashboard' : `/dashboard?days=${value}`;
+  const dashboardPath = (value = period, target = selectedUser) => {
+    const params = new URLSearchParams();
+    if (value !== 'all') params.set('days', value);
+    if (target?.id) params.set('user_id', target.id);
+    const query = params.toString();
+    return `/dashboard${query ? `?${query}` : ''}`;
+  };
 
-  async function load() {
+  async function load(account = user) {
     setError('');
     try {
+      if (account?.role === 'caregiver') {
+        const people = await request('/care/linked-users');
+        const target = people[0] || null;
+        setLinkedUsers(people); setSelectedUser(target); setCards([]); setRecommended([]); setTab('dashboard');
+        setStats(target ? await request(dashboardPath(period, target)) : null); setLoaded(true);
+        return;
+      }
       const [all, rec, dashboard] = await Promise.all([request('/cards'), request('/recommendations'), request(dashboardPath())]);
       setCards(all); setRecommended(rec); setStats(dashboard); setLoaded(true);
     } catch (e) {
@@ -41,7 +57,7 @@ function App() {
       try {
         const account = await request('/auth/me');
         setUser(account);
-        await load();
+        await load(account);
       } catch { setToken(null); }
       finally { setAuthReady(true); }
     }
@@ -54,7 +70,7 @@ function App() {
     try {
       const result = await request('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) });
       setToken(result.access_token); setUser(result.user);
-      await load();
+      await load(result.user);
     } catch (e) { setError(e.message); }
     finally { setBusy(false); setAuthReady(true); }
   }
@@ -63,7 +79,7 @@ function App() {
     setBusy(true);
     try { await request('/auth/logout', { method: 'POST' }); } catch { /* local logout still applies */ }
     window.speechSynthesis?.cancel(); setToken(null); setUser(null); setLoaded(false);
-    setCards([]); setRecommended([]); setStats(null); setBoard([]); setText(''); setError(''); setBusy(false);
+    setCards([]); setRecommended([]); setStats(null); setBoard([]); setLinkedUsers([]); setSelectedUser(null); setText(''); setError(''); setBusy(false);
   }
 
   function updateBoard(next) {
@@ -108,8 +124,21 @@ function App() {
     catch (e) { setError(e.message); }
     finally { setStatsBusy(false); }
   }
+  async function changeLinkedUser(value) {
+    const target = linkedUsers.find(person => person.id === value);
+    if (!target) return;
+    setSelectedUser(target); setStatsBusy(true); setError('');
+    try { setStats(await request(dashboardPath(period, target))); }
+    catch (e) { setError(e.message); }
+    finally { setStatsBusy(false); }
+  }
   function tile(card) {
-    return <button className="card" key={card.id} disabled={busy} onClick={() => add(card)}><span aria-hidden="true">{card.symbol}</span>{card.label}</button>;
+    const x = (card.image_index % 6) * 20;
+    const y = Math.floor(card.image_index / 6) * 50;
+    return <button className="card" key={card.id} disabled={busy} onClick={() => add(card)}>
+      <span className="card-art" role="img" aria-label={`${card.label} 그림`} style={{ backgroundImage: `url(${cardSprite})`, backgroundPosition: `${x}% ${y}%` }} />
+      <strong>{card.label}</strong>{card.reason && <small>{card.reason}</small>}
+    </button>;
   }
   if (!authReady) return <main className="login-page"><p role="status">로그인 정보를 확인하는 중입니다…</p></main>;
   if (!user) return <main className="login-page"><section className="login-card">
@@ -120,14 +149,14 @@ function App() {
       <label>아이디<input autoFocus autoComplete="username" value={username} onChange={e => setUsername(e.target.value)} required maxLength="64" /></label>
       <label>비밀번호<input type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} required maxLength="128" /></label>
       <button className="primary full" disabled={busy}>{busy ? '로그인 중…' : '로그인'}</button>
-    </form><p className="demo-account">데모 계정: <code>demo</code> / <code>demo1234</code></p>
+    </form><p className="demo-account">사용자: <code>demo</code> / <code>demo1234</code><br />보호자: <code>caregiver</code> / <code>caregiver1234</code></p>
   </section></main>;
   return <main className="app">
     <header><div className="brand"><span className="brand-mark" aria-hidden="true">💬</span><div><p className="eyebrow">그림으로 전하는 나의 이야기</p><h1>PESC MATE</h1></div></div><div className="account"><span className="profile-avatar" aria-hidden="true">😊</span><span className="status">{user.name} · {loaded ? '연결됨' : '연결 대기'}</span><button onClick={handleLogout} disabled={busy}>로그아웃</button></div></header>
-    <nav aria-label="주 메뉴"><button className={tab === 'cards' ? 'active' : ''} onClick={() => setTab('cards')}><span aria-hidden="true">🖼️</span>그림으로 말하기</button><button className={tab === 'dashboard' ? 'active' : ''} onClick={() => setTab('dashboard')}><span aria-hidden="true">📊</span>이용 현황</button></nav>
-    {error && <div role="alert" className="error">{error} <button disabled={busy} onClick={load}>다시 연결</button></div>}
+    <nav aria-label="주 메뉴">{user.role !== 'caregiver' && <button className={tab === 'cards' ? 'active' : ''} onClick={() => setTab('cards')}><span aria-hidden="true">🖼️</span>그림으로 말하기</button>}<button className={tab === 'dashboard' ? 'active' : ''} onClick={() => setTab('dashboard')}><span aria-hidden="true">📊</span>{user.role === 'caregiver' ? '보호자 현황' : '이용 현황'}</button></nav>
+    {error && <div role="alert" className="error">{error} <button disabled={busy} onClick={() => load(user)}>다시 연결</button></div>}
     {!loaded && !error && <p role="status">카드를 불러오는 중입니다…</p>}
-    {tab === 'cards' ? <div className="communication-layout">
+    {tab === 'cards' && user.role !== 'caregiver' ? <div className="communication-layout">
       <section className="recommend-panel"><div className="stage-title"><span className="stage-back" aria-hidden="true">‹‹</span><div><strong>오늘의 추천 카드</strong><i aria-hidden="true"><b></b><b></b><b></b></i><p>자주 쓰는 카드를 골라 문장을 시작해요</p></div><span className="stage-helper" aria-hidden="true">🌱</span></div><div className="cards recommendations">{recommended.map(tile)}</div><div className="stage-ground" aria-hidden="true">▲　▲　　▲　　　▲　▲</div></section>
       <div className="workspace"><section><div className="section-title"><h2>무엇을 말하고 싶나요?</h2><input aria-label="카드 검색" placeholder="카드 이름 검색" value={search} onChange={e => setSearch(e.target.value)} /></div>
         <div className="categories" aria-label="카테고리">{['전체', ...new Set(cards.map(c => c.category))].map(c => <button key={c} aria-pressed={category === c} className={category === c ? 'active' : ''} onClick={() => setCategory(c)}>{c}</button>)}</div>
@@ -142,9 +171,11 @@ function App() {
         <div className="actions"><button className="primary" disabled={!text || busy || speaking} onClick={speak}>🔊 읽어주기</button><button disabled={!speaking} onClick={() => { window.speechSynthesis.cancel(); setSpeaking(false); }}>중지</button></div>
         <p className="muted">현재는 규칙 기반 문장 생성을 사용합니다. 지원하지 않는 조합은 선택한 단어를 순서대로 표시합니다.</p>
       </section></div>
-    </div> : <section className="dashboard"><div className="panel-heading"><span aria-hidden="true">🏆</span><div><h2>나의 의사소통 기록</h2><p className="muted">{user.name} · {period === 'all' ? '전체 기간' : `최근 ${period}일`} · 문장 저장 기준</p></div></div>
+    </div> : <section className="dashboard"><div className="panel-heading"><span aria-hidden="true">🏆</span><div><h2>{user.role === 'caregiver' ? '보호 대상 의사소통 기록' : '나의 의사소통 기록'}</h2><p className="muted">{(selectedUser || user).name} · {period === 'all' ? '전체 기간' : `최근 ${period}일`} · 문장 저장 기준</p></div></div>
+      {user.role === 'caregiver' && <label className="user-picker">조회 사용자<select value={selectedUser?.id || ''} onChange={event => changeLinkedUser(event.target.value)} disabled={statsBusy}>{linkedUsers.map(person => <option key={person.id} value={person.id}>{person.name} ({person.username})</option>)}</select></label>}
       <div className="period-filter" aria-label="조회 기간">{[['7', '최근 7일'], ['30', '최근 30일'], ['all', '전체']].map(([value, label]) => <button key={value} className={period === value ? 'active' : ''} aria-pressed={period === value} disabled={statsBusy} onClick={() => changePeriod(value)}>{label}</button>)}</div>
       {statsBusy && <p className="muted" role="status">통계를 불러오는 중입니다…</p>}
+      {user.role === 'caregiver' && loaded && !selectedUser && <p className="empty">연결된 사용자가 없습니다.</p>}
       {stats && <div className={statsBusy ? 'stats-content loading' : 'stats-content'}><div className="metrics"><div>저장한 문장<strong>{stats.sessions}개</strong></div><div>사용한 카드<strong>{stats.selections}장</strong></div></div>
         <h3>카테고리별 사용</h3>{Object.entries(stats.categories).map(([name, count]) => <div className="bar" key={name}><span>{name}</span><meter min="0" max={Math.max(stats.selections, 1)} value={count} /> {count}회</div>)}
         <h3>자주 사용한 카드</h3><div className="categories">{stats.top_cards.slice(0, 8).map(c => <span className="status" key={c.id}>{c.symbol} {c.label} · {c.count}회</span>)}</div>

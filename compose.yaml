@@ -25,6 +25,8 @@ services:
       MONGODB_DATABASE: pesc_mate
       DEMO_USERNAME: demo
       DEMO_PASSWORD: demo1234
+      CAREGIVER_USERNAME: caregiver
+      CAREGIVER_PASSWORD: caregiver1234
     ports:
       - "127.0.0.1:8000:8000"
     volumes:

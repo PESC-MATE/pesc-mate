@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from pymongo.errors import DuplicateKeyError, PyMongoError
 from app.services.database import database, log_crud
 
-CARDS = [dict(id=k, label=l, symbol=s, category=c) for k, l, s, c in [
+CARDS = [dict(id=k, label=l, symbol=s, category=c, image_index=index) for index, (k, l, s, c) in enumerate([
     ('me', '나', '🙋', '사람'), ('mom', '엄마', '👩', '사람'),
     ('water', '물', '💧', '음식'), ('rice', '밥', '🍚', '음식'),
     ('apple', '사과', '🍎', '음식'), ('milk', '우유', '🥛', '음식'),
@@ -16,7 +16,7 @@ CARDS = [dict(id=k, label=l, symbol=s, category=c) for k, l, s, c in [
     ('toilet', '화장실', '🚻', '장소'), ('home', '집', '🏠', '장소'),
     ('happy', '좋아요', '😊', '감정'), ('hurt', '아파요', '🤕', '감정'),
     ('no', '싫어요', '🙅', '감정'), ('yes', '네', '👍', '감정'),
-]]
+])]
 INDEX = {card['id']: card for card in CARDS}
 
 
@@ -99,3 +99,25 @@ def statistics(user_id, days=None, now=None):
     return dict(sessions=len(rows), selections=sum(counts.values()),
                 top_cards=[INDEX[key] | {'count': count} for key, count in counts.most_common() if key in INDEX],
                 categories=dict(categories), recent=rows[:10], period_days=days)
+
+
+def ensure_demo_history(user_id):
+    """Create stable sample records only when the demo user has no history."""
+    collection = _collection()
+    if collection.count_documents({'user_id': user_id}, limit=1):
+        return
+    now = datetime.now(timezone.utc)
+    samples = [
+        ('10000000-0000-4000-8000-000000000001', ['me', 'water', 'drink'], 1),
+        ('10000000-0000-4000-8000-000000000002', ['me', 'rice', 'eat'], 4),
+        ('10000000-0000-4000-8000-000000000003', ['toilet', 'go'], 12),
+        ('10000000-0000-4000-8000-000000000004', ['help'], 38),
+    ]
+    for request_id, cards, days_ago in samples:
+        collection.update_one(
+            {'_id': request_id},
+            {'$setOnInsert': {'user_id': user_id, 'cards': cards, 'sentence': sentence(cards),
+                              'created_at': now - timedelta(days=days_ago), 'source': 'demo'}},
+            upsert=True,
+        )
+    log_crud('CREATE', 'communication_sessions', '시연용 기록 생성')

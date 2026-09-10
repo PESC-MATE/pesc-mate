@@ -35,6 +35,8 @@ function App() {
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const [linkedUsers, setLinkedUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [noteDrafts, setNoteDrafts] = useState({});
+  const [noteBusy, setNoteBusy] = useState('');
 
   const dashboardPath = (value = period, target = selectedUser) => {
     const params = new URLSearchParams();
@@ -147,6 +149,26 @@ function App() {
     catch (e) { setError(e.message); }
     finally { setStatsBusy(false); }
   }
+  async function saveCaregiverNote(sessionId) {
+    const content = (noteDrafts[sessionId] ?? stats.recent.find(row => row.id === sessionId)?.caregiver_note ?? '').trim();
+    if (!content) { setError('메모 내용을 입력해 주세요.'); return; }
+    setNoteBusy(sessionId); setError('');
+    try {
+      const saved = await request(`/care/notes/${sessionId}`, { method: 'PUT', body: JSON.stringify({ user_id: selectedUser.id, content }) });
+      setStats(current => ({ ...current, recent: current.recent.map(row => row.id === sessionId ? { ...row, caregiver_note: saved.content } : row) }));
+      setNoteDrafts(current => ({ ...current, [sessionId]: saved.content }));
+    } catch (e) { setError(e.message); }
+    finally { setNoteBusy(''); }
+  }
+  async function removeCaregiverNote(sessionId) {
+    setNoteBusy(sessionId); setError('');
+    try {
+      await request(`/care/notes/${sessionId}?user_id=${encodeURIComponent(selectedUser.id)}`, { method: 'DELETE' });
+      setStats(current => ({ ...current, recent: current.recent.map(row => row.id === sessionId ? { ...row, caregiver_note: null } : row) }));
+      setNoteDrafts(current => ({ ...current, [sessionId]: '' }));
+    } catch (e) { setError(e.message); }
+    finally { setNoteBusy(''); }
+  }
   function artStyle(card) {
     return { backgroundImage: `url(${cardSprite})`, backgroundPosition: `${(card.image_index % 6) * 20}% ${Math.floor(card.image_index / 6) * 50}%` };
   }
@@ -192,7 +214,7 @@ function App() {
         <button className="primary full" disabled={!board.length || busy} onClick={generate}>{busy ? '문장을 만드는 중…' : '문장 만들기 · 저장'}</button>
         <div className="sentence" aria-live="polite">{text || '만든 문장이 여기에 표시돼요.'}{text && <small className={`source-badge ${generationSource}`}>{generationSource === 'ollama' ? 'Qwen · Ollama 생성' : '규칙 기반 생성'}</small>}</div>
         <div className="actions"><button className="primary" disabled={!text || busy || speaking} onClick={speak}>🔊 읽어주기</button><button disabled={!speaking} onClick={() => { window.speechSynthesis.cancel(); setSpeaking(false); }}>중지</button></div>
-        <p className="muted">현재는 규칙 기반 문장 생성을 사용합니다. 지원하지 않는 조합은 선택한 단어를 순서대로 표시합니다.</p>
+        <p className="muted">Ollama Qwen으로 문장을 만들며, 모델을 사용할 수 없으면 규칙 기반 문장으로 자동 전환합니다.</p>
       </section></div>
     </div> : <section className="dashboard"><div className="panel-heading"><span aria-hidden="true">🏆</span><div><h2>{user.role === 'caregiver' ? '보호 대상 의사소통 기록' : '나의 의사소통 기록'}</h2><p className="muted">{(selectedUser || user).name} · {period === 'all' ? '전체 기간' : `최근 ${period}일`} · 문장 저장 기준</p></div></div>
       {user.role === 'caregiver' && <label className="user-picker">조회 사용자<select value={selectedUser?.id || ''} onChange={event => changeLinkedUser(event.target.value)} disabled={statsBusy}>{linkedUsers.map(person => <option key={person.id} value={person.id}>{person.name} ({person.username})</option>)}</select></label>}
@@ -209,7 +231,7 @@ function App() {
         <div className="metrics"><div>저장한 문장<strong>{stats.sessions}개</strong></div><div>사용한 카드<strong>{stats.selections}장</strong></div></div>
         <h3>카테고리별 사용</h3>{Object.entries(stats.categories).map(([name, count]) => <div className="bar" key={name}><span>{name}</span><meter min="0" max={Math.max(stats.selections, 1)} value={count} /> {count}회</div>)}
         <h3>자주 사용한 카드</h3><div className="categories">{stats.top_cards.slice(0, 8).map(c => <span className="status" key={c.id}>{c.symbol} {c.label} · {c.count}회</span>)}</div>
-        <h3>{user.role === 'caregiver' ? '최근 의사소통 타임라인' : '최근 문장'}</h3>{!stats.recent.length ? <p className="empty">선택한 기간에 기록이 없어요.</p> : <ul className="history">{stats.recent.map(r => <li key={r.id}>{user.role === 'caregiver' && <div className="history-cards">{r.cards.map((id, index) => cardPicture({ ...(CARD_META[id] || { id, label: id, image_index: 0 }), id: `${id}-${index}` }))}</div>}<span>{r.sentence}</span><time>{new Date(r.created_at).toLocaleString('ko-KR')}</time></li>)}</ul>}</div>}
+        <h3>{user.role === 'caregiver' ? '최근 의사소통 타임라인' : '최근 문장'}</h3>{!stats.recent.length ? <p className="empty">선택한 기간에 기록이 없어요.</p> : <ul className="history">{stats.recent.map(r => <li key={r.id}>{user.role === 'caregiver' && <div className="history-cards">{r.cards.map((id, index) => cardPicture({ ...(CARD_META[id] || { id, label: id, image_index: 0 }), id: `${id}-${index}` }))}</div>}<span>{r.sentence}</span><time>{new Date(r.created_at).toLocaleString('ko-KR')}</time>{user.role === 'caregiver' && <div className="caregiver-note"><textarea aria-label={`${r.sentence} 보호자 메모`} maxLength="500" placeholder="상황이나 반응을 메모해 주세요" value={noteDrafts[r.id] ?? r.caregiver_note ?? ''} onChange={event => setNoteDrafts(current => ({ ...current, [r.id]: event.target.value }))} /><div><small>{(noteDrafts[r.id] ?? r.caregiver_note ?? '').length}/500</small><button disabled={noteBusy === r.id} onClick={() => saveCaregiverNote(r.id)}>메모 저장</button>{r.caregiver_note && <button disabled={noteBusy === r.id} onClick={() => removeCaregiverNote(r.id)}>삭제</button>}</div></div>}</li>)}</ul>}</div>}
     </section>}
     <footer>실행용 프로토타입 · 실제 개인정보를 입력하지 마세요.</footer>
   </main>;

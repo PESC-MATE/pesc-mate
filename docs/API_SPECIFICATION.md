@@ -76,6 +76,8 @@ Authorization: Bearer {access_token}
 | 인증 | GET | `/api/auth/me` | 필요 | 현재 사용자 조회 |
 | 인증 | POST | `/api/auth/logout` | 필요 | 전달된 토큰의 세션 삭제 |
 | 보호자 | GET | `/api/care/linked-users` | 필요 | 보호자에게 연결된 사용자 조회 |
+| 보호자 | PUT | `/api/care/notes/{session_id}` | 필요 | 의사소통 기록의 보호자 메모 저장·수정 |
+| 보호자 | DELETE | `/api/care/notes/{session_id}` | 필요 | 보호자 메모 삭제 |
 | 카드 | GET | `/api/cards` | 필요 | 전체 카드 조회 |
 | 문장 | POST | `/api/sentences` | 필요 | 문장 생성 및 기록 저장 |
 | 추천 | GET | `/api/recommendations` | 필요 | 사용자별 추천 카드 조회 |
@@ -133,6 +135,7 @@ Authorization: Bearer {access_token}
 | `cards` | string array | 예 | 선택 순서가 보존된 카드 ID 목록 |
 | `sentence` | string | 예 | 생성된 한국어 문장 |
 | `generation_source` | string | 아니요 | `ollama` 또는 `rule` |
+| `caregiver_note` | string 또는 null | 아니요 | 보호자 대시보드 조회 시 현재 보호자가 작성한 메모 |
 | `created_at` | ISO 8601 string | 예 | 생성 시각 |
 
 ```json
@@ -293,6 +296,32 @@ Authorization: Bearer {access_token}
 ```
 
 보호자 계정에 연결된 일반 사용자 목록을 `User[]` 형식으로 반환한다. 일반 사용자는 호출할 수 없다.
+
+## 6.6 보호자 메모 저장 및 수정
+
+```http
+PUT /api/care/notes/{session_id}
+Authorization: Bearer {access_token}
+Content-Type: application/json
+```
+
+```json
+{
+  "user_id": "demo",
+  "content": "물을 자주 찾았음"
+}
+```
+
+연결된 사용자의 의사소통 기록에 최대 500자의 보호자 메모를 저장한다. 같은 기록에 다시 요청하면 기존 메모를 수정한다.
+
+## 6.7 보호자 메모 삭제
+
+```http
+DELETE /api/care/notes/{session_id}?user_id=demo
+Authorization: Bearer {access_token}
+```
+
+현재 보호자가 작성한 해당 기록의 메모를 삭제하며 성공 시 `204 No Content`를 반환한다.
 
 # 7. 카드 API
 
@@ -537,6 +566,7 @@ curl "http://127.0.0.1:8000/api/dashboard?days=7" \
 |---|---|---|
 | 로그인 | `users` | 데모 사용자 동기화 및 조회 |
 | 보호 대상 조회 | `caregiver_links`, `users` | 보호자-사용자 연결 조회 |
+| 보호자 메모 | `caregiver_notes`, `communication_sessions` | 기록 확인 및 메모 저장·조회·삭제 |
 | 로그인 | `auth_sessions` | 인증 세션 생성 |
 | 현재 사용자 | `auth_sessions`, `users` | 세션 및 사용자 조회 |
 | 로그아웃 | `auth_sessions` | 세션 삭제 |

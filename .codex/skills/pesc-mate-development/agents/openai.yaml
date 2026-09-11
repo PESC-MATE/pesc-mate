@@ -1,4 +1,0 @@
-interface:
-  display_name: "PESC MATE Development"
-  short_description: "Implement and verify PESC MATE frontend and backend changes"
-  default_prompt: "Use $pesc-mate-development to implement and verify a small PESC MATE feature."

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { hasToken, request, setToken } from "./services/api";
+import { clearBoard, loadBoard, saveBoard } from "./services/boardStorage";
 import cardSprite from "./assets/cards/pecs-card-sprite.png";
 
 const CARD_META = Object.fromEntries([
@@ -57,7 +58,7 @@ function App() {
         return;
       }
       const [all, rec, dashboard] = await Promise.all([request('/cards'), request('/recommendations'), request(dashboardPath())]);
-      setCards(all); setRecommended(rec); setStats(dashboard); setLoaded(true);
+      setCards(all); setRecommended(rec); setStats(dashboard); setBoard(loadBoard(account?.id, all)); setLoaded(true);
     } catch (e) {
       if (e.status === 401) { setToken(null); setUser(null); setLoaded(false); setError('로그인이 만료되었습니다. 다시 로그인해 주세요.'); }
       else setError(e.message || '서버에 연결하지 못했습니다.');
@@ -94,13 +95,14 @@ function App() {
   async function handleLogout() {
     setBusy(true);
     try { await request('/auth/logout', { method: 'POST' }); } catch { /* local logout still applies */ }
+    clearBoard(user?.id);
     window.speechSynthesis?.cancel(); setToken(null); setUser(null); setLoaded(false);
     setCards([]); setRecommended([]); setStats(null); setBoard([]); setLinkedUsers([]); setSelectedUser(null); setText(''); setError(''); setBusy(false);
   }
 
   function updateBoard(next) {
     window.speechSynthesis?.cancel(); setSpeaking(false);
-    setBoard(next); setText(''); setGenerationSource(''); setRequestId(crypto.randomUUID());
+    setBoard(next); saveBoard(user?.id, next); setText(''); setGenerationSource(''); setRequestId(crypto.randomUUID());
   }
   function add(card) {
     if (board.length >= 12) { setError('카드는 최대 12장까지 선택할 수 있어요.'); return; }

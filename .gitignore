@@ -20,4 +20,4 @@ reference/
 .DS_Store
 Thumbs.db
 
-.png
+*.png

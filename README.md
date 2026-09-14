@@ -93,5 +93,6 @@ npm run dev
 
 ## 개발 문서
 
+- [개발 TODO 및 요구사항 진행표](docs/TODO.md)
 - [커밋 메시지 규칙](docs/COMMIT_CONVENTION.md)
 - [API 명세서](docs/API_SPECIFICATION.md)

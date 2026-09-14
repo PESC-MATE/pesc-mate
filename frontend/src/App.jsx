@@ -23,7 +23,7 @@ function App() {
   const [board, setBoard] = useState([]);
   const [category, setCategory] = useState('전체');
   const [search, setSearch] = useState('');
-  const [tab, setTab] = useState('cards');
+  const [tab, setTab] = useState('home');
   const [text, setText] = useState('');
   const [generationSource, setGenerationSource] = useState('');
   const [error, setError] = useState('');
@@ -97,7 +97,7 @@ function App() {
     try { await request('/auth/logout', { method: 'POST' }); } catch { /* local logout still applies */ }
     clearBoard(user?.id);
     window.speechSynthesis?.cancel(); setToken(null); setUser(null); setLoaded(false);
-    setCards([]); setRecommended([]); setStats(null); setBoard([]); setLinkedUsers([]); setSelectedUser(null); setText(''); setError(''); setBusy(false);
+    setCards([]); setRecommended([]); setStats(null); setBoard([]); setLinkedUsers([]); setSelectedUser(null); setText(''); setError(''); setTab('home'); setBusy(false);
   }
 
   function updateBoard(next) {
@@ -183,6 +183,16 @@ function App() {
       <strong>{card.label}</strong>{card.reason && <small>{card.reason}</small>}
     </button>;
   }
+  const todayLabel = new Intl.DateTimeFormat('ko-KR', {
+    month: '2-digit', day: '2-digit', weekday: 'long',
+  }).format(new Date());
+  const pageTitle = user?.role === 'caregiver'
+    ? `${selectedUser?.name || '보호 대상'}의 기록을 살펴봐요.`
+    : tab === 'home'
+      ? '오늘은 무엇을 해볼까요?'
+      : tab === 'cards'
+      ? `오늘의 추천 카드 ${recommended.length}개를 준비했어요.`
+      : '나의 의사소통 기록을 확인해요.';
   if (!authReady) return <main className="login-page"><p role="status">로그인 정보를 확인하는 중입니다…</p></main>;
   if (!user) return <main className="login-page"><section className="login-card">
     <div className="login-mascot" aria-hidden="true">💬</div><p className="eyebrow">그림으로 전하는 나의 이야기</p><h1>PESC MATE</h1>
@@ -199,11 +209,32 @@ function App() {
     {authMode === 'login' && <p className="demo-account">사용자: <code>demo</code> / <code>demo1234</code><br />보호자: <code>caregiver</code> / <code>caregiver1234</code></p>}
   </section></main>;
   return <main className="app">
-    <header><div className="brand"><span className="brand-mark" aria-hidden="true">💬</span><div><p className="eyebrow">그림으로 전하는 나의 이야기</p><h1>PESC MATE</h1></div></div><div className="account"><span className="profile-avatar" aria-hidden="true">😊</span><span className="status">{user.name} · {loaded ? '연결됨' : '연결 대기'}</span><button onClick={handleLogout} disabled={busy}>로그아웃</button></div></header>
-    <nav aria-label="주 메뉴">{user.role !== 'caregiver' && <button className={tab === 'cards' ? 'active' : ''} onClick={() => setTab('cards')}><span aria-hidden="true">🖼️</span>그림으로 말하기</button>}<button className={tab === 'dashboard' ? 'active' : ''} onClick={() => setTab('dashboard')}><span aria-hidden="true">📊</span>{user.role === 'caregiver' ? '보호자 현황' : '이용 현황'}</button></nav>
-    {error && <div role="alert" className="error">{error} <button disabled={busy} onClick={() => load(user)}>다시 연결</button></div>}
-    {!loaded && !error && <p role="status">카드를 불러오는 중입니다…</p>}
-    {tab === 'cards' && user.role !== 'caregiver' ? <div className="communication-layout">
+    <aside className="sidebar">
+      <div className="sidebar-brand"><span className="brand-mark" aria-hidden="true">💬</span><strong>PESC<br />MATE</strong></div>
+      <div className="profile"><span className="profile-avatar" aria-hidden="true">😊</span><div><strong>{user.name}</strong><small>{user.role === 'caregiver' ? '보호자 계정' : 'PECS 사용자'}</small></div></div>
+      <nav aria-label="주 메뉴">{user.role !== 'caregiver' && <><button className={tab === 'home' ? 'active' : ''} onClick={() => setTab('home')}><span aria-hidden="true">⌂</span>홈</button><button className={tab === 'cards' ? 'active' : ''} onClick={() => setTab('cards')}><span aria-hidden="true">▦</span>그림으로 말하기{tab === 'cards' && <i>{recommended.length}</i>}</button></>}<button className={tab === 'dashboard' ? 'active' : ''} onClick={() => setTab('dashboard')}><span aria-hidden="true">▥</span>{user.role === 'caregiver' ? '보호자 현황' : '나의 이용 기록'}</button></nav>
+      <div className="sidebar-summary"><small>오늘의 의사소통</small><strong>{stats?.today_sessions || 0}개 문장</strong><span>{stats?.today_selections || 0}장의 카드를 사용했어요</span></div>
+      <div className="sidebar-tip"><span aria-hidden="true">🌱</span><div><small>도움말</small><strong>그림을 차례대로 눌러<br />마음을 표현해 보세요.</strong></div></div>
+      <button className="logout" onClick={handleLogout} disabled={busy}>로그아웃</button>
+    </aside>
+    <div className="app-content">
+      <header className="topbar"><div><p className="eyebrow">오늘은 {todayLabel}</p><h1>{pageTitle}</h1></div><span className="status"><b className={loaded ? 'online' : ''}></b>{loaded ? '서비스 연결됨' : '연결 대기'}</span></header>
+      {error && <div role="alert" className="error">{error} <button disabled={busy} onClick={() => load(user)}>다시 연결</button></div>}
+      {!loaded && !error && <p role="status">카드를 불러오는 중입니다…</p>}
+      {tab === 'home' && user.role !== 'caregiver' ? <section className="home-screen">
+        <div className="home-heading"><div><p>원하는 활동을 선택해 주세요</p><h2>나의 PESC MATE</h2></div><span aria-hidden="true">🌈</span></div>
+        <div className="home-launch-grid">
+          <button className="home-launch-card communication" onClick={() => setTab('cards')}>
+            <span className="home-card-visual" aria-hidden="true"><b>💬</b><i>🖼️</i></span>
+            <span className="home-card-label"><small>카드를 골라 문장을 만들어요</small><strong>그림으로 말하기</strong><b aria-hidden="true">→</b></span>
+          </button>
+          <button className="home-launch-card records" onClick={() => setTab('dashboard')}>
+            <span className="home-card-visual" aria-hidden="true"><b>📊</b><i>⭐</i></span>
+            <span className="home-card-label"><small>내가 표현한 이야기를 봐요</small><strong>나의 이용 기록</strong><b aria-hidden="true">→</b></span>
+          </button>
+        </div>
+        <div className="home-note"><span aria-hidden="true">🌱</span><div><strong>{user.name}님, 반가워요!</strong><p>그림 카드를 눌러 오늘의 이야기를 시작해 보세요.</p></div></div>
+      </section> : tab === 'cards' && user.role !== 'caregiver' ? <div className="communication-layout">
       <section className="recommend-panel"><div className="stage-title"><span className="stage-back" aria-hidden="true">‹‹</span><div><strong>오늘의 추천 카드</strong><i aria-hidden="true"><b></b><b></b><b></b></i><p>자주 쓰는 카드를 골라 문장을 시작해요</p></div><span className="stage-helper" aria-hidden="true">🌱</span></div><div className="cards recommendations">{recommended.map(tile)}</div><div className="stage-ground" aria-hidden="true">▲　▲　　▲　　　▲　▲</div></section>
       <div className="workspace"><section><div className="section-title"><h2>무엇을 말하고 싶나요?</h2><input aria-label="카드 검색" placeholder="카드 이름 검색" value={search} onChange={e => setSearch(e.target.value)} /></div>
         <div className="categories" aria-label="카테고리">{['전체', ...new Set(cards.map(c => c.category))].map(c => <button key={c} aria-pressed={category === c} className={category === c ? 'active' : ''} onClick={() => setCategory(c)}>{c}</button>)}</div>
@@ -234,8 +265,9 @@ function App() {
         <h3>카테고리별 사용</h3>{Object.entries(stats.categories).map(([name, count]) => <div className="bar" key={name}><span>{name}</span><meter min="0" max={Math.max(stats.selections, 1)} value={count} /> {count}회</div>)}
         <h3>자주 사용한 카드</h3><div className="categories">{stats.top_cards.slice(0, 8).map(c => <span className="status" key={c.id}>{c.symbol} {c.label} · {c.count}회</span>)}</div>
         <h3>{user.role === 'caregiver' ? '최근 의사소통 타임라인' : '최근 문장'}</h3>{!stats.recent.length ? <p className="empty">선택한 기간에 기록이 없어요.</p> : <ul className="history">{stats.recent.map(r => <li key={r.id}>{user.role === 'caregiver' && <div className="history-cards">{r.cards.map((id, index) => cardPicture({ ...(CARD_META[id] || { id, label: id, image_index: 0 }), id: `${id}-${index}` }))}</div>}<span>{r.sentence}</span><time>{new Date(r.created_at).toLocaleString('ko-KR')}</time>{user.role === 'caregiver' && <div className="caregiver-note"><textarea aria-label={`${r.sentence} 보호자 메모`} maxLength="500" placeholder="상황이나 반응을 메모해 주세요" value={noteDrafts[r.id] ?? r.caregiver_note ?? ''} onChange={event => setNoteDrafts(current => ({ ...current, [r.id]: event.target.value }))} /><div><small>{(noteDrafts[r.id] ?? r.caregiver_note ?? '').length}/500</small><button disabled={noteBusy === r.id} onClick={() => saveCaregiverNote(r.id)}>메모 저장</button>{r.caregiver_note && <button disabled={noteBusy === r.id} onClick={() => removeCaregiverNote(r.id)}>삭제</button>}</div></div>}</li>)}</ul>}</div>}
-    </section>}
-    <footer>실행용 프로토타입 · 실제 개인정보를 입력하지 마세요.</footer>
+      </section>}
+      <footer>실행용 프로토타입 · 실제 개인정보를 입력하지 마세요.</footer>
+    </div>
   </main>;
 }
 

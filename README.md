@@ -77,6 +77,13 @@ npm run dev
 ```
 
 웹 화면은 `http://127.0.0.1:5173`에서 확인할 수 있습니다.
+`npm run dev`와 Docker Compose 실행 중에는 소스를 저장하면 브라우저가
+자동으로 갱신됩니다. 정적 빌드 산출물을 계속 갱신하려면 다음을 실행합니다.
+
+```bash
+cd frontend
+npm run build:watch
+```
 
 ## 개발 문서
 

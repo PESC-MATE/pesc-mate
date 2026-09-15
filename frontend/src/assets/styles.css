@@ -224,7 +224,7 @@ input { border-color: #d6e8ef; }
 }
 
 /* Dashboard shell inspired by the supplied learning-home reference. */
-:root { color: #303542; background: #eef1f8; }
+:root { color: #303542; background: #eef1f8; scrollbar-gutter: stable; }
 body { background: #eef1f8; }
 body::before, body::after { display: none; }
 
@@ -278,7 +278,7 @@ body::before, body::after { display: none; }
 .sidebar nav button:hover:not(:disabled) { transform: none; background: #f5f6fa; box-shadow: none; }
 .sidebar nav button.active { color: #20242c; background: #f7f8fb; box-shadow: none; }
 .sidebar nav button.active::after { content: ""; position: absolute; right: -22px; top: 4px; bottom: 4px; width: 4px; border-radius: 4px 0 0 4px; background: #f42c7e; }
-.sidebar nav button i { margin-left: auto; min-width: 25px; height: 25px; display: grid; place-items: center; border-radius: 50%; color: #fff; background: #f42c7e; font-size: .72rem; font-style: normal; box-shadow: 0 4px 10px #f42c7e42; }
+.sidebar nav button i { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); min-width: 25px; height: 25px; display: grid; place-items: center; border-radius: 50%; color: #fff; background: #f42c7e; font-size: .72rem; font-style: normal; box-shadow: 0 4px 10px #f42c7e42; }
 .sidebar-summary { margin: auto -22px 0; padding: 22px 24px; border-top: 1px solid #eceef3; }
 .sidebar-summary small, .sidebar-summary strong, .sidebar-summary span { display: block; }
 .sidebar-summary small { color: #969ba5; }

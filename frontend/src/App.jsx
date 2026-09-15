@@ -23,6 +23,7 @@ function App() {
   const [board, setBoard] = useState([]);
   const [category, setCategory] = useState('전체');
   const [search, setSearch] = useState('');
+  const [selectedCard, setSelectedCard] = useState(null);
   const [tab, setTab] = useState('home');
   const [text, setText] = useState('');
   const [generationSource, setGenerationSource] = useState('');
@@ -183,6 +184,10 @@ function App() {
       <strong>{card.label}</strong>{card.reason && <small>{card.reason}</small>}
     </button>;
   }
+  const visibleCards = cards.filter(card =>
+    (category === '전체' || card.category === category)
+    && card.label.includes(search.trim())
+  );
   const todayLabel = new Intl.DateTimeFormat('ko-KR', {
     month: '2-digit', day: '2-digit', weekday: 'long',
   }).format(new Date());
@@ -192,6 +197,8 @@ function App() {
       ? '오늘은 무엇을 해볼까요?'
       : tab === 'cards'
       ? `오늘의 추천 카드 ${recommended.length}개를 준비했어요.`
+      : tab === 'catalog'
+      ? `그림 카드 ${cards.length}개를 살펴보세요.`
       : '나의 의사소통 기록을 확인해요.';
   if (!authReady) return <main className="login-page"><p role="status">로그인 정보를 확인하는 중입니다…</p></main>;
   if (!user) return <main className="login-page"><section className="login-card">
@@ -212,7 +219,7 @@ function App() {
     <aside className="sidebar">
       <div className="sidebar-brand"><span className="brand-mark" aria-hidden="true">💬</span><strong>PESC<br />MATE</strong></div>
       <div className="profile"><span className="profile-avatar" aria-hidden="true">😊</span><div><strong>{user.name}</strong><small>{user.role === 'caregiver' ? '보호자 계정' : 'PECS 사용자'}</small></div></div>
-      <nav aria-label="주 메뉴">{user.role !== 'caregiver' && <><button className={tab === 'home' ? 'active' : ''} onClick={() => setTab('home')}><span aria-hidden="true">⌂</span>홈</button><button className={tab === 'cards' ? 'active' : ''} onClick={() => setTab('cards')}><span aria-hidden="true">▦</span>그림으로 말하기{tab === 'cards' && <i>{recommended.length}</i>}</button></>}<button className={tab === 'dashboard' ? 'active' : ''} onClick={() => setTab('dashboard')}><span aria-hidden="true">▥</span>{user.role === 'caregiver' ? '보호자 현황' : '나의 이용 기록'}</button></nav>
+      <nav aria-label="주 메뉴">{user.role !== 'caregiver' && <><button className={tab === 'home' ? 'active' : ''} onClick={() => setTab('home')}><span aria-hidden="true">⌂</span>홈</button><button className={tab === 'cards' ? 'active' : ''} onClick={() => setTab('cards')}><span aria-hidden="true">▦</span>그림으로 말하기{tab === 'cards' && <i>{recommended.length}</i>}</button><button className={tab === 'catalog' ? 'active' : ''} onClick={() => setTab('catalog')}><span aria-hidden="true">▤</span>카드</button></>}<button className={tab === 'dashboard' ? 'active' : ''} onClick={() => setTab('dashboard')}><span aria-hidden="true">▥</span>{user.role === 'caregiver' ? '보호자 현황' : '나의 이용 기록'}</button></nav>
       <div className="sidebar-summary"><small>오늘의 의사소통</small><strong>{stats?.today_sessions || 0}개 문장</strong><span>{stats?.today_selections || 0}장의 카드를 사용했어요</span></div>
       <div className="sidebar-tip"><span aria-hidden="true">🌱</span><div><small>도움말</small><strong>그림을 차례대로 눌러<br />마음을 표현해 보세요.</strong></div></div>
       <button className="logout" onClick={handleLogout} disabled={busy}>로그아웃</button>
@@ -232,14 +239,18 @@ function App() {
             <span className="home-card-visual" aria-hidden="true"><b>📊</b><i>⭐</i></span>
             <span className="home-card-label"><small>내가 표현한 이야기를 봐요</small><strong>나의 이용 기록</strong><b aria-hidden="true">→</b></span>
           </button>
+          <button className="home-launch-card catalog" onClick={() => setTab('catalog')}>
+            <span className="home-card-visual" aria-hidden="true"><b>🖼️</b><i>🔎</i></span>
+            <span className="home-card-label"><small>그림과 뜻을 차근차근 살펴봐요</small><strong>카드</strong><b aria-hidden="true">→</b></span>
+          </button>
         </div>
         <div className="home-note"><span aria-hidden="true">🌱</span><div><strong>{user.name}님, 반가워요!</strong><p>그림 카드를 눌러 오늘의 이야기를 시작해 보세요.</p></div></div>
       </section> : tab === 'cards' && user.role !== 'caregiver' ? <div className="communication-layout">
       <section className="recommend-panel"><div className="stage-title"><span className="stage-back" aria-hidden="true">‹‹</span><div><strong>오늘의 추천 카드</strong><i aria-hidden="true"><b></b><b></b><b></b></i><p>자주 쓰는 카드를 골라 문장을 시작해요</p></div><span className="stage-helper" aria-hidden="true">🌱</span></div><div className="cards recommendations">{recommended.map(tile)}</div><div className="stage-ground" aria-hidden="true">▲　▲　　▲　　　▲　▲</div></section>
       <div className="workspace"><section><div className="section-title"><h2>무엇을 말하고 싶나요?</h2><input aria-label="카드 검색" placeholder="카드 이름 검색" value={search} onChange={e => setSearch(e.target.value)} /></div>
         <div className="categories" aria-label="카테고리">{['전체', ...new Set(cards.map(c => c.category))].map(c => <button key={c} aria-pressed={category === c} className={category === c ? 'active' : ''} onClick={() => setCategory(c)}>{c}</button>)}</div>
-        <div className="cards">{cards.filter(c => (category === '전체' || c.category === category) && c.label.includes(search.trim())).map(tile)}</div>
-        {loaded && !cards.some(c => (category === '전체' || c.category === category) && c.label.includes(search.trim())) && <p>검색 결과가 없어요.</p>}
+        <div className="cards">{visibleCards.map(tile)}</div>
+        {loaded && !visibleCards.length && <p>검색 결과가 없어요.</p>}
       </section>
       <section className="board"><div className="section-title"><h2>나의 문장 <small>{board.length}/12</small></h2><button disabled={!board.length || busy} onClick={() => { if (window.confirm('선택한 카드를 모두 지울까요?')) updateBoard([]); }}>비우기</button></div>
         {!board.length && <p className="empty">왼쪽 카드를 눌러 보세요.<br />나 → 물 → 마시다</p>}
@@ -249,7 +260,23 @@ function App() {
         <div className="actions"><button className="primary" disabled={!text || busy || speaking} onClick={speak}>🔊 읽어주기</button><button disabled={!speaking} onClick={() => { window.speechSynthesis.cancel(); setSpeaking(false); }}>중지</button></div>
         <p className="muted">Ollama Qwen으로 문장을 만들며, 모델을 사용할 수 없으면 규칙 기반 문장으로 자동 전환합니다.</p>
       </section></div>
-    </div> : <section className="dashboard"><div className="panel-heading"><span aria-hidden="true">🏆</span><div><h2>{user.role === 'caregiver' ? '보호 대상 의사소통 기록' : '나의 의사소통 기록'}</h2><p className="muted">{(selectedUser || user).name} · {period === 'all' ? '전체 기간' : `최근 ${period}일`} · 문장 저장 기준</p></div></div>
+    </div> : tab === 'catalog' && user.role !== 'caregiver' ? <section className="card-catalog">
+      <div className="catalog-toolbar">
+        <div><h2>카드 보기</h2><p className="muted">카드를 눌러 그림과 뜻을 확인해 보세요.</p></div>
+        <input aria-label="카드 검색" placeholder="카드 이름 검색" value={search} onChange={event => setSearch(event.target.value)} />
+      </div>
+      <div className="categories" aria-label="카고리">{['전체', ...new Set(cards.map(card => card.category))].map(item => <button key={item} aria-pressed={category === item} className={category === item ? 'active' : ''} onClick={() => setCategory(item)}>{item}</button>)}</div>
+      <div className="catalog-layout">
+        <div className="catalog-grid" aria-label="카드 목록">{visibleCards.map(card => <button className="catalog-card" key={card.id} aria-pressed={selectedCard?.id === card.id} onClick={() => setSelectedCard(card)}>
+          <span className="card-art" role="img" aria-label={`${card.label} 그림`} style={artStyle(card)} />
+          <span><strong>{card.label}</strong><small>{card.category}</small></span>
+        </button>)}</div>
+        <aside className="card-detail" aria-live="polite">
+          {selectedCard ? <><span className="detail-art" role="img" aria-label={`${selectedCard.label} 그림`} style={artStyle(selectedCard)} /><span className="detail-category">{selectedCard.category}</span><h3>{selectedCard.label}</h3><p>{selectedCard.label}을(를) 표현하는 PECS 카드예요.</p><button className="primary" onClick={() => { add(selectedCard); setTab('cards'); }}>문장에 사용하기</button></> : <div className="detail-empty"><span aria-hidden="true">👆</span><strong>카드를 선택해 주세요</strong><p>선택한 카드의 그림과 뜻이 여기에 보여요.</p></div>}
+        </aside>
+      </div>
+      {loaded && !visibleCards.length && <p className="empty">조건에 맞는 카드가 없어요. 다른 검색어나 카테고리를 선택해 보세요.</p>}
+    </section> : <section className="dashboard"><div className="panel-heading"><span aria-hidden="true">🏆</span><div><h2>{user.role === 'caregiver' ? '보호 대상 의사소통 기록' : '나의 의사소통 기록'}</h2><p className="muted">{(selectedUser || user).name} · {period === 'all' ? '전체 기간' : `최근 ${period}일`} · 문장 저장 기준</p></div></div>
       {user.role === 'caregiver' && <label className="user-picker">조회 사용자<select value={selectedUser?.id || ''} onChange={event => changeLinkedUser(event.target.value)} disabled={statsBusy}>{linkedUsers.map(person => <option key={person.id} value={person.id}>{person.name} ({person.username})</option>)}</select></label>}
       <div className="period-filter" aria-label="조회 기간">{[['7', '최근 7일'], ['30', '최근 30일'], ['all', '전체']].map(([value, label]) => <button key={value} className={period === value ? 'active' : ''} aria-pressed={period === value} disabled={statsBusy} onClick={() => changePeriod(value)}>{label}</button>)}</div>
       {statsBusy && <p className="muted" role="status">통계를 불러오는 중입니다…</p>}

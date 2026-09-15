@@ -4,19 +4,6 @@ AI 기반 온라인 PECS 의사소통 플랫폼입니다.
 
 ## 프로젝트 구조
 
-
-사용자 데모 로그인은 `demo` / `demo1234`, 보호자 데모 로그인은
-`caregiver` / `caregiver1234`입니다. 최초 로그인 시 기간 필터와 통계를 바로 시연할 수 있는
-샘플 기록 4건이 생성됩니다. 운영 환경에서는
-`DEMO_USERNAME`과 `DEMO_PASSWORD`를 변경하고 별도의 회원 관리 정책을 적용해야 합니다.
-
-기록은 MongoDB의 `pesc_mate.communication_sessions` 컬렉션에 저장됩니다.
-Docker 실행 시 데이터는 `mongodb_data` 볼륨에 유지됩니다. 개별 실행에서는
-`MONGODB_URI`와 `MONGODB_DATABASE` 환경 변수로 연결 정보를 설정합니다.
-
-간단한 시연: `나 → 물 → 마시다` 선택 → `문장 만들기 · 저장` →
-`읽어주기` → `이용 현황`에서 저장 결과 확인.
-
 백엔드 테스트: `cd backend` 후 `python -m unittest test_communication -v`.
 프런트엔드 검증: `cd frontend` 후 `npm run build`.
 

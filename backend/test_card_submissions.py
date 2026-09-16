@@ -24,6 +24,9 @@ class Collection:
     def insert_one(self, document):
         self.documents.append(deepcopy(document))
 
+    def create_index(self, *_args, **_kwargs):
+        return 'normalized_label_1'
+
     def find_one(self, query):
         return next((deepcopy(document) for document in self.documents
                      if all(document.get(key) == value for key, value in query.items())), None)
@@ -113,6 +116,26 @@ class CardSubmissionTests(unittest.TestCase):
             create_submission('demo', '연필', '뜻', '학습', 'private',
                               'fake.png', 'image/png', b'not an image')
         self.assertEqual(corrupt.exception.status_code, 422)
+
+    def test_prohibited_variants_invalid_characters_and_duplicates_are_rejected(self):
+        with self.assertRaises(HTTPException) as prohibited:
+            create_submission('demo', '안녕', '씨 ! 발', '감정', 'private',
+                              'card.png', 'image/png', self.image)
+        self.assertEqual(prohibited.exception.status_code, 422)
+        with self.assertRaises(HTTPException) as invalid_character:
+            create_submission('demo', '연필😀', '뜻', '학습', 'private',
+                              'card.png', 'image/png', self.image)
+        self.assertEqual(invalid_character.exception.status_code, 422)
+        with self.assertRaises(HTTPException) as default_duplicate:
+            create_submission('demo', '사 과', '과일', '음식', 'private',
+                              'card.png', 'image/png', self.image)
+        self.assertEqual(default_duplicate.exception.status_code, 409)
+        create_submission('demo', '연필', '글을 쓰는 도구', '학습', 'private',
+                          'card.png', 'image/png', self.image)
+        with self.assertRaises(HTTPException) as pending_duplicate:
+            create_submission('another', '연 필', '학습 도구', '학습', 'shared',
+                              'card.png', 'image/png', self.image)
+        self.assertEqual(pending_duplicate.exception.status_code, 409)
 
 
 if __name__ == '__main__':

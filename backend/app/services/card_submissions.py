@@ -2,11 +2,13 @@
 from datetime import datetime, timezone
 from io import BytesIO
 from uuid import uuid4
+import re
+import unicodedata
 import warnings
 
 from fastapi import HTTPException
 from PIL import Image, ImageOps, UnidentifiedImageError
-from pymongo.errors import PyMongoError
+from pymongo.errors import DuplicateKeyError, PyMongoError
 
 from app.services.database import database, log_crud
 
@@ -16,6 +18,9 @@ MIN_IMAGE_EDGE = 128
 MAX_IMAGE_EDGE = 4096
 MAX_IMAGE_PIXELS = 16_000_000
 IMAGE_FORMAT_TYPES = {'JPEG': 'image/jpeg', 'PNG': 'image/png', 'WEBP': 'image/webp'}
+PROHIBITED_EXPRESSIONS = {'시발', '씨발', '병신', '개새끼'}
+LABEL_PATTERN = re.compile(r'^[가-힣ㄱ-ㅎㅏ-ㅣA-Za-z0-9 ]+$')
+MEANING_PATTERN = re.compile(r'''^[가-힣ㄱ-ㅎㅏ-ㅣA-Za-z0-9\s.,!?\-'"()·]+$''')
 
 
 def _collection():
@@ -43,6 +48,32 @@ def _public(document):
         'reviewed_at': document.get('reviewed_at'),
         'created_at': document['created_at'],
     }
+
+
+def _compact_text(value):
+    normalized = unicodedata.normalize('NFKC', value).casefold()
+    return ''.join(character for character in normalized if character.isalnum())
+
+
+def _validate_text(label, meaning):
+    if not 1 <= len(label) <= 30 or not 1 <= len(meaning) <= 120:
+        raise HTTPException(422, '카드명은 1~30자, 뜻은 1~120자로 입력해 주세요.')
+    if not LABEL_PATTERN.fullmatch(label) or not MEANING_PATTERN.fullmatch(meaning):
+        raise HTTPException(422, '카드명 또는 뜻에 허용되지 않는 문자가 있습니다.')
+    compact = _compact_text(f'{label} {meaning}')
+    if any(word in compact for word in PROHIBITED_EXPRESSIONS):
+        raise HTTPException(422, '적절하지 않은 표현은 카드에 사용할 수 없습니다.')
+
+
+def _ensure_unique_label(collection, normalized_label):
+    from app.services.communication import CARDS
+    if normalized_label in {_compact_text(card['label']) for card in CARDS}:
+        raise HTTPException(409, '이미 등록된 카드명입니다.')
+    duplicate = next((row for row in collection.find({})
+                      if row.get('status') != 'rejected'
+                      and _compact_text(row['label']) == normalized_label), None)
+    if duplicate:
+        raise HTTPException(409, '이미 등록되었거나 승인 대기 중인 카드명입니다.')
 
 
 def _normalize_image(image_data, declared_content_type):
@@ -84,13 +115,16 @@ def create_submission(owner_id, label, meaning, category, visibility,
     category = category.strip()
     if not label or not meaning or not category:
         raise HTTPException(422, '카드명과 뜻, 카테고리를 모두 입력해 주세요.')
+    _validate_text(label, meaning)
     if visibility not in {'private', 'shared'}:
         raise HTTPException(422, '공개 범위가 올바르지 않습니다.')
     safe_image_data, safe_content_type = _normalize_image(image_data, image_content_type)
 
+    normalized_label = _compact_text(label)
     document = {
         '_id': str(uuid4()),
         'label': label,
+        'normalized_label': normalized_label,
         'meaning': meaning,
         'category': category,
         'visibility': visibility,
@@ -105,9 +139,19 @@ def create_submission(owner_id, label, meaning, category, visibility,
         'created_at': datetime.now(timezone.utc),
     }
     try:
-        _collection().insert_one(document)
+        collection = _collection()
+        collection.create_index(
+            'normalized_label', unique=True,
+            partialFilterExpression={'status': {'$in': ['pending', 'approved']}},
+        )
+        _ensure_unique_label(collection, normalized_label)
+        collection.insert_one(document)
         log_crud('CREATE', 'card_submissions', '카드 승인 요청 저장')
         return _public(document)
+    except DuplicateKeyError as exc:
+        raise HTTPException(409, '이미 등록되었거나 승인 대기 중인 카드명입니다.') from exc
+    except HTTPException:
+        raise
     except PyMongoError as exc:
         raise HTTPException(503, '카드 등록 요청을 저장하지 못했습니다.') from exc
 

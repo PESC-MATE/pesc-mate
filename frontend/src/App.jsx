@@ -27,6 +27,7 @@ function App() {
   const [showCardForm, setShowCardForm] = useState(false);
   const [cardSubmissions, setCardSubmissions] = useState([]);
   const [cardFormBusy, setCardFormBusy] = useState(false);
+  const [cardFormError, setCardFormError] = useState('');
   const [adminSubmissions, setAdminSubmissions] = useState([]);
   const [reviewDrafts, setReviewDrafts] = useState({});
   const [reviewBusy, setReviewBusy] = useState('');
@@ -189,13 +190,13 @@ function App() {
   async function submitCard(event) {
     event.preventDefault();
     const form = event.currentTarget;
-    setCardFormBusy(true); setError('');
+    setCardFormBusy(true); setCardFormError(''); setError('');
     try {
       const saved = await request('/cards/submissions', { method: 'POST', body: new FormData(form) });
       setCardSubmissions(current => [saved, ...current]);
       setShowCardForm(false);
       form.reset();
-    } catch (e) { setError(e.message); }
+    } catch (e) { setCardFormError(e.message); }
     finally { setCardFormBusy(false); }
   }
   async function hydrateImages(items) {
@@ -317,7 +318,7 @@ function App() {
     </div> : tab === 'catalog' && user.role !== 'caregiver' ? <section className="card-catalog">
       <div className="catalog-toolbar">
         <div><h2>카드 보기</h2><p className="muted">카드를 눌러 그림과 뜻을 확인해 보세요.</p></div>
-        <div className="catalog-actions"><input aria-label="카드 검색" placeholder="카드 이름 검색" value={search} onChange={event => setSearch(event.target.value)} /><button className="primary" onClick={() => setShowCardForm(true)}>+ 카드 등록</button></div>
+        <div className="catalog-actions"><input aria-label="카드 검색" placeholder="카드 이름 검색" value={search} onChange={event => setSearch(event.target.value)} /><button className="primary" onClick={() => { setCardFormError(''); setShowCardForm(true); }}>+ 카드 등록</button></div>
       </div>
       <div className="categories" aria-label="카고리">{['전체', ...new Set(cards.map(card => card.category))].map(item => <button key={item} aria-pressed={category === item} className={category === item ? 'active' : ''} onClick={() => setCategory(item)}>{item}</button>)}</div>
       <div className="catalog-layout">
@@ -335,6 +336,7 @@ function App() {
         <section className="card-form-modal" role="dialog" aria-modal="true" aria-labelledby="card-form-title">
           <div className="modal-heading"><div><h2 id="card-form-title">새 카드 등록</h2><p className="muted">등록할 카드의 정보를 입력해 주세요.</p></div><button type="button" aria-label="등록 폼 닫기" onClick={() => setShowCardForm(false)}>×</button></div>
           <form className="card-form" onSubmit={submitCard}>
+            {cardFormError && <div role="alert" className="error">{cardFormError}</div>}
             <label>카드명<input name="label" required maxLength="30" placeholder="예: 연필" /></label>
             <label>카드 뜻<textarea name="meaning" required maxLength="120" rows="3" placeholder="카드가 나타내는 뜻을 적어 주세요." /></label>
             <label>카테고리<select name="category" required defaultValue=""><option value="" disabled>카테고리 선택</option>{[...new Set(cards.map(card => card.category))].map(item => <option key={item}>{item}</option>)}</select></label>

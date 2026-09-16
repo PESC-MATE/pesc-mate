@@ -41,3 +41,14 @@ export async function getHealth() {
 
   return response.json();
 }
+
+export async function requestBlob(path) {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    signal: AbortSignal.timeout(15000),
+    headers: localStorage.getItem(TOKEN_KEY)
+      ? { Authorization: `Bearer ${localStorage.getItem(TOKEN_KEY)}` }
+      : {},
+  });
+  if (!response.ok) throw new Error('이미지를 불러오지 못했습니다.');
+  return response.blob();
+}

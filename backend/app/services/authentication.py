@@ -42,6 +42,8 @@ def ensure_demo_users():
     _ensure_user(user_id, os.environ.get('DEMO_PASSWORD', 'demo1234'), '민준', 'user')
     caregiver_id = os.environ.get('CAREGIVER_USERNAME', 'caregiver')
     _ensure_user(caregiver_id, os.environ.get('CAREGIVER_PASSWORD', 'caregiver1234'), '민준 보호자', 'caregiver')
+    admin_id = os.environ.get('ADMIN_USERNAME', 'admin')
+    _ensure_user(admin_id, os.environ.get('ADMIN_PASSWORD', 'admin1234'), '컨텐츠 관리자', 'admin')
     _database().caregiver_links.update_one(
         {'_id': f'{caregiver_id}:{user_id}'},
         {'$set': {'caregiver_id': caregiver_id, 'user_id': user_id},

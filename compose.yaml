@@ -27,6 +27,8 @@ services:
       DEMO_PASSWORD: demo1234
       CAREGIVER_USERNAME: caregiver
       CAREGIVER_PASSWORD: caregiver1234
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: admin1234
       OLLAMA_ENABLED: "true"
       OLLAMA_BASE_URL: http://host.docker.internal:11434
       OLLAMA_MODEL: qwen2.5:0.5b

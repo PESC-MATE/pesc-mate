@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { hasToken, request, setToken } from "./services/api";
+import { hasToken, request, requestBlob, setToken } from "./services/api";
 import { clearBoard, loadBoard, saveBoard } from "./services/boardStorage";
 import cardSprite from "./assets/cards/pecs-card-sprite.png";
 
@@ -27,6 +27,9 @@ function App() {
   const [showCardForm, setShowCardForm] = useState(false);
   const [cardSubmissions, setCardSubmissions] = useState([]);
   const [cardFormBusy, setCardFormBusy] = useState(false);
+  const [adminSubmissions, setAdminSubmissions] = useState([]);
+  const [reviewDrafts, setReviewDrafts] = useState({});
+  const [reviewBusy, setReviewBusy] = useState('');
   const [tab, setTab] = useState('home');
   const [text, setText] = useState('');
   const [generationSource, setGenerationSource] = useState('');
@@ -54,6 +57,12 @@ function App() {
   async function load(account = user) {
     setError('');
     try {
+      if (account?.role === 'admin') {
+        const submissions = await request('/admin/card-submissions');
+        setAdminSubmissions(await hydrateImages(submissions));
+        setTab('admin'); setLoaded(true);
+        return;
+      }
       if (account?.role === 'caregiver') {
         const people = await request('/care/linked-users');
         const target = people[0] || null;
@@ -61,7 +70,8 @@ function App() {
         setStats(target ? await request(dashboardPath(period, target)) : null); setLoaded(true);
         return;
       }
-      const [all, rec, dashboard, submissions] = await Promise.all([request('/cards'), request('/recommendations'), request(dashboardPath()), request('/cards/submissions')]);
+      const [rawCards, rawRecommended, dashboard, submissions] = await Promise.all([request('/cards'), request('/recommendations'), request(dashboardPath()), request('/cards/submissions')]);
+      const [all, rec] = await Promise.all([hydrateImages(rawCards), hydrateImages(rawRecommended)]);
       setCards(all); setRecommended(rec); setStats(dashboard); setCardSubmissions(submissions); setBoard(loadBoard(account?.id, all)); setLoaded(true);
     } catch (e) {
       if (e.status === 401) { setToken(null); setUser(null); setLoaded(false); setError('로그인이 만료되었습니다. 다시 로그인해 주세요.'); }
@@ -101,7 +111,8 @@ function App() {
     try { await request('/auth/logout', { method: 'POST' }); } catch { /* local logout still applies */ }
     clearBoard(user?.id);
     window.speechSynthesis?.cancel(); setToken(null); setUser(null); setLoaded(false);
-    setCards([]); setRecommended([]); setStats(null); setBoard([]); setCardSubmissions([]); setLinkedUsers([]); setSelectedUser(null); setText(''); setError(''); setTab('home'); setBusy(false);
+    [...cards, ...recommended, ...adminSubmissions].forEach(item => { if (item.image_src) URL.revokeObjectURL(item.image_src); });
+    setCards([]); setRecommended([]); setStats(null); setBoard([]); setCardSubmissions([]); setAdminSubmissions([]); setLinkedUsers([]); setSelectedUser(null); setText(''); setError(''); setTab('home'); setBusy(false);
   }
 
   function updateBoard(next) {
@@ -187,7 +198,27 @@ function App() {
     } catch (e) { setError(e.message); }
     finally { setCardFormBusy(false); }
   }
+  async function hydrateImages(items) {
+    return Promise.all(items.map(async item => {
+      if (!item.image_url) return item;
+      try { return { ...item, image_src: URL.createObjectURL(await requestBlob(item.image_url)) }; }
+      catch { return item; }
+    }));
+  }
+  async function reviewCard(item, decision) {
+    const reason = (reviewDrafts[item.id] || '').trim();
+    if (decision === 'rejected' && !reason) { setError('반려 사유를 입력해 주세요.'); return; }
+    setReviewBusy(item.id); setError('');
+    try {
+      const saved = await request(`/admin/card-submissions/${item.id}`, {
+        method: 'PATCH', body: JSON.stringify({ decision, reason }),
+      });
+      setAdminSubmissions(current => current.map(row => row.id === item.id ? { ...row, ...saved } : row));
+    } catch (e) { setError(e.message); }
+    finally { setReviewBusy(''); }
+  }
   function artStyle(card) {
+    if (card.image_src) return { backgroundImage: `url(${card.image_src})`, backgroundPosition: 'center', backgroundSize: 'cover' };
     return { backgroundImage: `url(${cardSprite})`, backgroundPosition: `${(card.image_index % 6) * 20}% ${Math.floor(card.image_index / 6) * 50}%` };
   }
   function cardPicture(card, className = 'mini-card') {
@@ -206,7 +237,9 @@ function App() {
   const todayLabel = new Intl.DateTimeFormat('ko-KR', {
     month: '2-digit', day: '2-digit', weekday: 'long',
   }).format(new Date());
-  const pageTitle = user?.role === 'caregiver'
+  const pageTitle = user?.role === 'admin'
+    ? '카드 등록 요청을 검토해요.'
+    : user?.role === 'caregiver'
     ? `${selectedUser?.name || '보호 대상'}의 기록을 살펴봐요.`
     : tab === 'home'
       ? '오늘은 무엇을 해볼까요?'
@@ -228,13 +261,13 @@ function App() {
       <button className="primary full" disabled={busy}>{busy ? '처리 중…' : authMode === 'login' ? '로그인' : '가입하고 시작하기'}</button>
     </form>
     <button className="auth-switch" disabled={busy} onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setError(''); setUsername(''); setPassword(''); setPasswordConfirm(''); setName(''); }}>{authMode === 'login' ? '처음 이용하시나요? 사용자 가입' : '이미 계정이 있나요? 로그인'}</button>
-    {authMode === 'login' && <p className="demo-account">사용자: <code>demo</code> / <code>demo1234</code><br />보호자: <code>caregiver</code> / <code>caregiver1234</code></p>}
+    {authMode === 'login' && <p className="demo-account">사용자: <code>demo</code> / <code>demo1234</code><br />보호자: <code>caregiver</code> / <code>caregiver1234</code><br />관리자: <code>admin</code> / <code>admin1234</code></p>}
   </section></main>;
   return <main className="app">
     <aside className="sidebar">
       <div className="sidebar-brand"><span className="brand-mark" aria-hidden="true">💬</span><strong>PESC<br />MATE</strong></div>
-      <div className="profile"><span className="profile-avatar" aria-hidden="true">😊</span><div><strong>{user.name}</strong><small>{user.role === 'caregiver' ? '보호자 계정' : 'PECS 사용자'}</small></div></div>
-      <nav aria-label="주 메뉴">{user.role !== 'caregiver' && <><button className={tab === 'home' ? 'active' : ''} onClick={() => setTab('home')}><span aria-hidden="true">⌂</span>홈</button><button className={tab === 'cards' ? 'active' : ''} onClick={() => setTab('cards')}><span aria-hidden="true">▦</span>그림으로 말하기<i aria-label={`추천 카드 ${recommended.length}개`}>{recommended.length}</i></button><button className={tab === 'catalog' ? 'active' : ''} onClick={() => setTab('catalog')}><span aria-hidden="true">▤</span>카드</button></>}<button className={tab === 'dashboard' ? 'active' : ''} onClick={() => setTab('dashboard')}><span aria-hidden="true">▥</span>{user.role === 'caregiver' ? '보호자 현황' : '나의 이용 기록'}</button></nav>
+      <div className="profile"><span className="profile-avatar" aria-hidden="true">{user.role === 'admin' ? '🛡️' : '😊'}</span><div><strong>{user.name}</strong><small>{user.role === 'admin' ? '컨텐츠 관리자' : user.role === 'caregiver' ? '보호자 계정' : 'PECS 사용자'}</small></div></div>
+      <nav aria-label="주 메뉴">{user.role === 'admin' ? <button className="active" onClick={() => setTab('admin')}><span aria-hidden="true">☑</span>카드 승인<i aria-label={`승인 대기 ${adminSubmissions.filter(item => item.status === 'pending').length}개`}>{adminSubmissions.filter(item => item.status === 'pending').length}</i></button> : <>{user.role !== 'caregiver' && <><button className={tab === 'home' ? 'active' : ''} onClick={() => setTab('home')}><span aria-hidden="true">⌂</span>홈</button><button className={tab === 'cards' ? 'active' : ''} onClick={() => setTab('cards')}><span aria-hidden="true">▦</span>그림으로 말하기<i aria-label={`추천 카드 ${recommended.length}개`}>{recommended.length}</i></button><button className={tab === 'catalog' ? 'active' : ''} onClick={() => setTab('catalog')}><span aria-hidden="true">▤</span>카드</button></>}<button className={tab === 'dashboard' ? 'active' : ''} onClick={() => setTab('dashboard')}><span aria-hidden="true">▥</span>{user.role === 'caregiver' ? '보호자 현황' : '나의 이용 기록'}</button></>}</nav>
       <div className="sidebar-summary"><small>오늘의 의사소통</small><strong>{stats?.today_sessions || 0}개 문장</strong><span>{stats?.today_selections || 0}장의 카드를 사용했어요</span></div>
       <div className="sidebar-tip"><span aria-hidden="true">🌱</span><div><small>도움말</small><strong>그림을 차례대로 눌러<br />마음을 표현해 보세요.</strong></div></div>
       <button className="logout" onClick={handleLogout} disabled={busy}>로그아웃</button>
@@ -306,6 +339,16 @@ function App() {
           </form>
         </section>
       </div>}
+    </section> : tab === 'admin' && user.role === 'admin' ? <section className="admin-review">
+      <div className="panel-heading"><span aria-hidden="true">🛡️</span><div><h2>카드 승인 관리</h2><p className="muted">사용자가 제출한 카드를 확인하고 승인하거나 반려해 주세요.</p></div></div>
+      <div className="review-summary"><strong>{adminSubmissions.filter(item => item.status === 'pending').length}</strong><span>승인 대기</span><strong>{adminSubmissions.filter(item => item.status === 'approved').length}</strong><span>승인 완료</span><strong>{adminSubmissions.filter(item => item.status === 'rejected').length}</strong><span>반려</span></div>
+      <div className="review-grid">{adminSubmissions.map(item => <article className="review-card" key={item.id}>
+        <span className="review-image" role="img" aria-label={`${item.label} 제출 이미지`} style={artStyle(item)} />
+        <div className="review-content"><div className="review-title"><span><small>{item.category} · {item.visibility === 'private' ? '개인 카드' : '공개 카드'}</small><h3>{item.label}</h3></span><b className={`submission-status ${item.status}`}>{item.status === 'pending' ? '승인 대기' : item.status === 'approved' ? '승인' : '반려'}</b></div><p>{item.meaning}</p><small>제출자 {item.owner_id} · {new Date(item.created_at).toLocaleString('ko-KR')}</small>
+          {item.status === 'pending' ? <><textarea aria-label={`${item.label} 검토 사유`} maxLength="500" placeholder="반려 시 사유를 입력해 주세요." value={reviewDrafts[item.id] || ''} onChange={event => setReviewDrafts(current => ({ ...current, [item.id]: event.target.value }))} /><div className="review-actions"><button className="primary" disabled={reviewBusy === item.id} onClick={() => reviewCard(item, 'approved')}>승인</button><button className="danger" disabled={reviewBusy === item.id} onClick={() => reviewCard(item, 'rejected')}>반려</button></div></> : item.review_reason && <p className="review-reason">처리 사유: {item.review_reason}</p>}
+        </div>
+      </article>)}</div>
+      {!adminSubmissions.length && <p className="empty">아직 제출된 카드가 없습니다.</p>}
     </section> : <section className="dashboard"><div className="panel-heading"><span aria-hidden="true">🏆</span><div><h2>{user.role === 'caregiver' ? '보호 대상 의사소통 기록' : '나의 의사소통 기록'}</h2><p className="muted">{(selectedUser || user).name} · {period === 'all' ? '전체 기간' : `최근 ${period}일`} · 문장 저장 기준</p></div></div>
       {user.role === 'caregiver' && <label className="user-picker">조회 사용자<select value={selectedUser?.id || ''} onChange={event => changeLinkedUser(event.target.value)} disabled={statsBusy}>{linkedUsers.map(person => <option key={person.id} value={person.id}>{person.name} ({person.username})</option>)}</select></label>}
       <div className="period-filter" aria-label="조회 기간">{[['7', '최근 7일'], ['30', '최근 30일'], ['all', '전체']].map(([value, label]) => <button key={value} className={period === value ? 'active' : ''} aria-pressed={period === value} disabled={statsBusy} onClick={() => changePeriod(value)}>{label}</button>)}</div>

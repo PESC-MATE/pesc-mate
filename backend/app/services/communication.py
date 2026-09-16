@@ -36,8 +36,9 @@ def _public(document):
     return result
 
 
-def sentence(ids):
-    if any(key not in INDEX for key in ids):
+def sentence(ids, card_index=None):
+    cards = card_index or INDEX
+    if any(key not in cards for key in ids):
         raise HTTPException(422, '알 수 없는 카드가 포함되어 있습니다.')
     prefix = '저는 ' if ids[0] == 'me' else ''
     rest = ids[1:] if prefix else ids
@@ -49,13 +50,15 @@ def sentence(ids):
             return prefix + objects[noun] + (' 먹고 싶어요.' if verb == 'eat' else ' 마시고 싶어요.')
         if noun in places and verb == 'go':
             return prefix + places[noun] + ' 가고 싶어요.'
-    return ' · '.join(INDEX[key]['label'] for key in ids)
+    return ' · '.join(cards[key]['label'] for key in ids)
 
 
-def save_session(request, user_id):
+def save_session(request, user_id, custom_cards=None):
     card_ids = list(request.cards)
-    fallback = sentence(card_ids)
-    result, generation_source = generate_sentence([INDEX[key]['label'] for key in card_ids], fallback)
+    custom_index = {card['id']: card for card in (custom_cards or [])}
+    card_index = INDEX | custom_index
+    fallback = sentence(card_ids, card_index)
+    result, generation_source = generate_sentence([card_index[key]['label'] for key in card_ids], fallback)
     request_id = str(request.request_id)
     try:
         collection = _collection()
@@ -65,7 +68,10 @@ def save_session(request, user_id):
             if existing['cards'] != card_ids:
                 raise HTTPException(409, '같은 요청 번호에 다른 카드가 전달되었습니다.')
             return _public(existing)
-        document = {'_id': request_id, 'user_id': user_id, 'cards': card_ids, 'sentence': result,
+        snapshots = {key: {field: card_index[key].get(field) for field in ('id', 'label', 'symbol', 'category')}
+                     for key in card_ids if key in custom_index}
+        document = {'_id': request_id, 'user_id': user_id, 'cards': card_ids, 'card_metadata': snapshots,
+                    'sentence': result,
                     'generation_source': generation_source, 'created_at': datetime.now(timezone.utc)}
         try:
             collection.insert_one(document)
@@ -95,10 +101,13 @@ def statistics(user_id, days=None, now=None):
     except PyMongoError as exc:
         raise HTTPException(503, 'MongoDB에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.') from exc
     counts = Counter(key for row in rows for key in row['cards'])
+    card_index = dict(INDEX)
+    for row in rows:
+        card_index.update(row.get('card_metadata') or {})
     categories = Counter()
     for key, count in counts.items():
-        if key in INDEX:
-            categories[INDEX[key]['category']] += count
+        if key in card_index:
+            categories[card_index[key]['category']] += count
     today = reference_time.date()
     today_rows = [row for row in rows if datetime.fromisoformat(row['created_at']).date() == today]
     daily_counts = Counter(datetime.fromisoformat(row['created_at']).date().isoformat() for row in rows)
@@ -116,7 +125,7 @@ def statistics(user_id, days=None, now=None):
             attention.append(INDEX[key] | {'count': sum(row['cards'].count(key) for row in matching),
                                            'last_used_at': matching[0]['created_at']})
     return dict(sessions=len(rows), selections=sum(counts.values()),
-                top_cards=[INDEX[key] | {'count': count} for key, count in counts.most_common() if key in INDEX],
+                top_cards=[card_index[key] | {'count': count} for key, count in counts.most_common() if key in card_index],
                 categories=dict(categories), recent=rows[:10], period_days=days,
                 today_sessions=len(today_rows),
                 today_selections=sum(len(row['cards']) for row in today_rows),

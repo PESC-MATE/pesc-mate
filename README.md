@@ -85,6 +85,9 @@ cd frontend
 npm run build:watch
 ```
 
+개발용 관리자 계정은 `admin` / `admin1234`이며, 사용자가 제출한
+카드를 관리자 화면에서 승인하거나 반려할 수 있습니다.
+
 ## 개발 문서
 
 - [개발 TODO 및 요구사항 진행표](docs/TODO.md)

@@ -111,5 +111,16 @@ class CommunicationTests(unittest.TestCase):
         ensure_demo_history('demo')
         self.assertEqual(statistics('demo')['sessions'], 4)
 
+    def test_approved_custom_card_can_generate_and_be_counted(self):
+        custom = {'id': 'custom:pencil', 'label': '연필', 'symbol': '🖼️', 'category': '학습'}
+        result = save_session(
+            SentenceRequest(cards=['custom:pencil'], request_id=uuid4()),
+            'demo', [custom],
+        )
+        self.assertEqual(result['sentence'], '연필')
+        stats = statistics('demo')
+        self.assertEqual(stats['top_cards'][0]['label'], '연필')
+        self.assertEqual(stats['categories']['학습'], 1)
+
 
 if __name__ == '__main__': unittest.main()

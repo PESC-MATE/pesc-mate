@@ -81,6 +81,9 @@ Authorization: Bearer {access_token}
 | 카드 | GET | `/api/cards` | 필요 | 전체 카드 조회 |
 | 카드 | GET | `/api/cards/submissions` | 필요 | 본인 카드 등록 요청 조회 |
 | 카드 | POST | `/api/cards/submissions` | 필요 | 카드 승인 요청 저장 |
+| 카드 | GET | `/api/cards/submissions/{id}/image` | 필요 | 권한이 있는 카드 이미지 조회 |
+| 관리자 | GET | `/api/admin/card-submissions` | 관리자 | 전체 카드 요청 조회 |
+| 관리자 | PATCH | `/api/admin/card-submissions/{id}` | 관리자 | 카드 승인 또는 반려 |
 | 문장 | POST | `/api/sentences` | 필요 | 문장 생성 및 기록 저장 |
 | 추천 | GET | `/api/recommendations` | 필요 | 사용자별 추천 카드 조회 |
 | 통계 | GET | `/api/dashboard` | 필요 | 본인 또는 연결 사용자 이용 통계 조회 |
@@ -389,6 +392,33 @@ Authorization: Bearer {access_token}
 
 현재 로그인한 사용자가 제출한 요청만 최신순으로 반환한다.
 
+## 7.4 카드 승인·반려
+
+```http
+GET /api/admin/card-submissions
+Authorization: Bearer {admin_access_token}
+```
+
+관리자는 전체 제출 목록과 이미지를 확인할 수 있다. 검토 결과는 다음과
+같이 저장한다.
+
+```http
+PATCH /api/admin/card-submissions/{submission_id}
+Authorization: Bearer {admin_access_token}
+Content-Type: application/json
+```
+
+```json
+{
+  "decision": "approved",
+  "reason": ""
+}
+```
+
+`decision`은 `approved` 또는 `rejected`이다. 반려할 때는 `reason`이
+필수다. 승인된 카드만 `/api/cards`의 기본 18개 카드 뒤에 추가되며,
+개인 카드는 소유자에게만, 공개 카드는 모든 일반 사용자에게 노출된다.
+
 # 8. 문장 API
 
 ## 8.1 문장 생성 및 저장
@@ -600,7 +630,8 @@ curl "http://127.0.0.1:8000/api/dashboard?days=7" \
 | 로그인 | `auth_sessions` | 인증 세션 생성 |
 | 현재 사용자 | `auth_sessions`, `users` | 세션 및 사용자 조회 |
 | 로그아웃 | `auth_sessions` | 세션 삭제 |
-| 카드 등록 | `card_submissions` | 승인 대기 요청 저장 및 본인 내역 조회 |
+| 카드 등록 | `card_submissions` | 제출, 승인·반려 저장 및 사용자 카드 조회 |
+| 카드 감사 | `card_audit_logs` | 관리자 승인·반려 행위자와 시각 저장 |
 | 문장 생성 | `communication_sessions` | 중복 확인 및 문장 기록 생성 |
 | 추천 | `communication_sessions` | 로그인 사용자 전체 기록 조회 |
 | 이용 현황 | `communication_sessions` | 사용자 및 기간 조건 조회 |
@@ -616,7 +647,7 @@ DB CRUD | READ | communication_sessions | 사용자 통계 조회 (최근 7일)
 1. 비밀번호 변경 및 계정 탈퇴 API는 구현되지 않았다.
 2. 기본 데모 계정은 개발·시연용이며 운영 배포 전에 교체해야 한다.
 3. MongoDB 자체 인증은 현재 개발 구성에 적용되지 않았다.
-4. 카드 승인·반려·수정·삭제 API는 구현되지 않았다.
+4. 카드 작성 중·비활성 상태와 수정·삭제 API는 구현되지 않았다.
 5. Ollama가 실행되지 않거나 모델 응답이 60초를 초과하면 규칙 기반 문장을 사용한다.
 6. 음성 출력은 프런트엔드의 Web Speech API로 처리하므로 백엔드 TTS API는 없다.
 7. `/api/health`는 백엔드 상태만 반환하며 MongoDB 준비 상태를 응답에 포함하지 않는다.

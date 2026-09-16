@@ -1,12 +1,16 @@
 from datetime import datetime
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from typing import Literal
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, Field
 from uuid import UUID
 from app.services.communication import CARDS, save_session, statistics
 from app.services.authentication import current_user, dashboard_user, linked_users, login, logout, register, security
 from app.services.model import status as model_status
 from app.services.caregiver_notes import delete_note, notes_for, save_note
-from app.services.card_submissions import MAX_IMAGE_BYTES, create_submission, submissions_for
+from app.services.card_submissions import (
+    MAX_IMAGE_BYTES, approved_cards_for, create_submission, image_for,
+    review_submission, submissions_for, submissions_for_review,
+)
 
 api_router = APIRouter()
 
@@ -69,7 +73,10 @@ class CardResponse(BaseModel):
     label: str
     symbol: str
     category: str
-    image_index: int
+    image_index: int | None = None
+    meaning: str | None = None
+    image_url: str | None = None
+    custom: bool | None = None
     count: int | None = None
     reason: str | None = None
 
@@ -84,7 +91,16 @@ class CardSubmissionResponse(BaseModel):
     status: str
     image_filename: str
     image_content_type: str
+    image_url: str
+    review_reason: str | None = None
+    reviewer_id: str | None = None
+    reviewed_at: datetime | None = None
     created_at: datetime
+
+
+class CardReviewRequest(BaseModel):
+    decision: Literal['approved', 'rejected']
+    reason: str = Field(default='', max_length=500)
 
 
 class CommunicationSessionResponse(BaseModel):
@@ -125,6 +141,12 @@ class DashboardResponse(BaseModel):
 def require_communicator(user):
     if user['role'] != 'user':
         raise HTTPException(403, 'PECS 사용자만 카드 기능을 이용할 수 있습니다.')
+    return user
+
+
+def require_admin(user):
+    if user['role'] != 'admin':
+        raise HTTPException(403, '관리자 계정만 이용할 수 있습니다.')
     return user
 
 
@@ -182,9 +204,9 @@ def sign_out(_user=Depends(current_user), credentials=Depends(security)):
 
 
 @api_router.get('/cards', response_model=list[CardResponse], response_model_exclude_none=True, tags=['카드'])
-def cards(_=Depends(current_user)):
-    require_communicator(_)
-    return CARDS
+def cards(user=Depends(current_user)):
+    require_communicator(user)
+    return CARDS + approved_cards_for(user['id'])
 
 
 @api_router.get('/cards/submissions', response_model=list[CardSubmissionResponse], tags=['카드'])
@@ -206,10 +228,30 @@ async def submit_card(label: str = Form(min_length=1, max_length=30),
                              image.filename, image.content_type, image_data)
 
 
+@api_router.get('/cards/submissions/{submission_id}/image', tags=['카드'])
+def card_submission_image(submission_id: str, user=Depends(current_user)):
+    content, content_type = image_for(submission_id, user)
+    return Response(content=content, media_type=content_type,
+                    headers={'Cache-Control': 'private, max-age=300'})
+
+
+@api_router.get('/admin/card-submissions', response_model=list[CardSubmissionResponse], tags=['관리자'])
+def admin_card_submissions(user=Depends(current_user)):
+    require_admin(user)
+    return submissions_for_review()
+
+
+@api_router.patch('/admin/card-submissions/{submission_id}', response_model=CardSubmissionResponse, tags=['관리자'])
+def review_card_submission(submission_id: str, request: CardReviewRequest,
+                           user=Depends(current_user)):
+    require_admin(user)
+    return review_submission(submission_id, user['id'], request.decision, request.reason)
+
+
 @api_router.post('/sentences', response_model=CommunicationSessionResponse, tags=['문장'])
 def generate_sentence(request: SentenceRequest, user=Depends(current_user)):
     require_communicator(user)
-    return save_session(request, user['id'])
+    return save_session(request, user['id'], approved_cards_for(user['id']))
 
 
 @api_router.get('/recommendations', response_model=list[CardResponse], response_model_exclude_none=True, tags=['추천'])
@@ -217,8 +259,11 @@ def recommendations(user=Depends(current_user)):
     require_communicator(user)
     used = statistics(user['id'])['top_cards']
     keys = {c['id'] for c in used}
-    frequent = [card | {'reason': f"자주 사용함 · {card['count']}회"} for card in used]
-    defaults = [card | {'reason': '처음 시작하기 좋은 카드'} for card in CARDS if card['id'] not in keys]
+    available = CARDS + approved_cards_for(user['id'])
+    available_by_id = {card['id']: card for card in available}
+    frequent = [available_by_id.get(card['id'], {}) | card |
+                {'reason': f"자주 사용함 · {card['count']}회"} for card in used]
+    defaults = [card | {'reason': '처음 시작하기 좋은 카드'} for card in available if card['id'] not in keys]
     return (frequent + defaults)[:6]
 
 

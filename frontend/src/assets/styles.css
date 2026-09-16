@@ -54,6 +54,9 @@ section { background: #fffef4e8; border: 4px solid #fff; padding: 22px; border-r
 .card:nth-child(4n+3) { background: #edf7ff; }
 .card:nth-child(4n) { background: #f7eeff; }
 .card-art { display: block; width: 100%; aspect-ratio: 1; border-radius: 13px; background-size: 600% 300%; background-repeat: no-repeat; box-shadow: 0 2px 8px #61798924; }
+.image-fallback { display: flex !important; flex-direction: column; align-items: center; justify-content: center; gap: 7px; padding: 10px; color: #77818d; background: linear-gradient(145deg, #f3f5f8, #e7ebf0); background-image: none !important; text-align: center; }
+.image-fallback > b { font-size: clamp(1.7rem, 4vw, 2.8rem); }
+.image-fallback > small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-weight: 700; }
 .card > strong { position: relative; z-index: 1; }
 .card > small { position: relative; z-index: 1; line-height: 1.25; }
 .recommendations { grid-template-columns: 1fr; }

@@ -202,7 +202,7 @@ function App() {
     return Promise.all(items.map(async item => {
       if (!item.image_url) return item;
       try { return { ...item, image_src: URL.createObjectURL(await requestBlob(item.image_url)) }; }
-      catch { return item; }
+      catch { return { ...item, image_failed: true }; }
     }));
   }
   async function reviewCard(item, decision) {
@@ -221,12 +221,18 @@ function App() {
     if (card.image_src) return { backgroundImage: `url(${card.image_src})`, backgroundPosition: 'center', backgroundSize: 'cover' };
     return { backgroundImage: `url(${cardSprite})`, backgroundPosition: `${(card.image_index % 6) * 20}% ${Math.floor(card.image_index / 6) * 50}%` };
   }
+  function cardArt(card, className = 'card-art') {
+    const hasImage = Boolean(card.image_src) || Number.isInteger(card.image_index);
+    return <span className={`${className}${hasImage ? '' : ' image-fallback'}`} role="img" aria-label={hasImage ? `${card.label} 그림` : `${card.label} 대체 이미지`} style={hasImage ? artStyle(card) : undefined}>
+      {!hasImage && <><b aria-hidden="true">🖼️</b><small>{card.label}</small></>}
+    </span>;
+  }
   function cardPicture(card, className = 'mini-card') {
     return <span key={card.id} className={className} title={card.label} aria-label={card.label} role="img" style={artStyle(card)} />;
   }
   function tile(card) {
     return <button className="card" key={card.id} disabled={busy} onClick={() => add(card)}>
-      <span className="card-art" role="img" aria-label={`${card.label} 그림`} style={artStyle(card)} />
+      {cardArt(card)}
       <strong>{card.label}</strong>{card.reason && <small>{card.reason}</small>}
     </button>;
   }
@@ -316,11 +322,11 @@ function App() {
       <div className="categories" aria-label="카고리">{['전체', ...new Set(cards.map(card => card.category))].map(item => <button key={item} aria-pressed={category === item} className={category === item ? 'active' : ''} onClick={() => setCategory(item)}>{item}</button>)}</div>
       <div className="catalog-layout">
         <div className="catalog-grid" aria-label="카드 목록">{visibleCards.map(card => <button className="catalog-card" key={card.id} aria-pressed={selectedCard?.id === card.id} onClick={() => setSelectedCard(card)}>
-          <span className="card-art" role="img" aria-label={`${card.label} 그림`} style={artStyle(card)} />
+          {cardArt(card)}
           <span><strong>{card.label}</strong><small>{card.category}</small></span>
         </button>)}</div>
         <aside className="card-detail" aria-live="polite">
-          {selectedCard ? <><span className="detail-art" role="img" aria-label={`${selectedCard.label} 그림`} style={artStyle(selectedCard)} /><span className="detail-category">{selectedCard.category}</span><h3>{selectedCard.label}</h3><p>{selectedCard.label}을(를) 표현하는 PECS 카드예요.</p><button className="primary" onClick={() => { add(selectedCard); setTab('cards'); }}>문장에 사용하기</button></> : <div className="detail-empty"><span aria-hidden="true">👆</span><strong>카드를 선택해 주세요</strong><p>선택한 카드의 그림과 뜻이 여기에 보여요.</p></div>}
+          {selectedCard ? <>{cardArt(selectedCard, 'detail-art')}<span className="detail-category">{selectedCard.category}</span><h3>{selectedCard.label}</h3><p>{selectedCard.label}을(를) 표현하는 PECS 카드예요.</p><button className="primary" onClick={() => { add(selectedCard); setTab('cards'); }}>문장에 사용하기</button></> : <div className="detail-empty"><span aria-hidden="true">👆</span><strong>카드를 선택해 주세요</strong><p>선택한 카드의 그림과 뜻이 여기에 보여요.</p></div>}
         </aside>
       </div>
       <div className="submission-list"><h3>나의 등록 요청</h3>{cardSubmissions.length ? <ul>{cardSubmissions.map(item => <li key={item.id}><span><strong>{item.label}</strong><small>{item.category} · {item.visibility === 'private' ? '나만 사용' : '공개 요청'}</small></span><b className={`submission-status ${item.status}`}>{item.status === 'pending' ? '승인 대기' : item.status}</b></li>)}</ul> : <p className="muted">아직 등록한 카드가 없어요.</p>}</div>
@@ -343,7 +349,7 @@ function App() {
       <div className="panel-heading"><span aria-hidden="true">🛡️</span><div><h2>카드 승인 관리</h2><p className="muted">사용자가 제출한 카드를 확인하고 승인하거나 반려해 주세요.</p></div></div>
       <div className="review-summary"><strong>{adminSubmissions.filter(item => item.status === 'pending').length}</strong><span>승인 대기</span><strong>{adminSubmissions.filter(item => item.status === 'approved').length}</strong><span>승인 완료</span><strong>{adminSubmissions.filter(item => item.status === 'rejected').length}</strong><span>반려</span></div>
       <div className="review-grid">{adminSubmissions.map(item => <article className="review-card" key={item.id}>
-        <span className="review-image" role="img" aria-label={`${item.label} 제출 이미지`} style={artStyle(item)} />
+        {cardArt(item, 'review-image')}
         <div className="review-content"><div className="review-title"><span><small>{item.category} · {item.visibility === 'private' ? '개인 카드' : '공개 카드'}</small><h3>{item.label}</h3></span><b className={`submission-status ${item.status}`}>{item.status === 'pending' ? '승인 대기' : item.status === 'approved' ? '승인' : '반려'}</b></div><p>{item.meaning}</p><small>제출자 {item.owner_id} · {new Date(item.created_at).toLocaleString('ko-KR')}</small>
           {item.status === 'pending' ? <><textarea aria-label={`${item.label} 검토 사유`} maxLength="500" placeholder="반려 시 사유를 입력해 주세요." value={reviewDrafts[item.id] || ''} onChange={event => setReviewDrafts(current => ({ ...current, [item.id]: event.target.value }))} /><div className="review-actions"><button className="primary" disabled={reviewBusy === item.id} onClick={() => reviewCard(item, 'approved')}>승인</button><button className="danger" disabled={reviewBusy === item.id} onClick={() => reviewCard(item, 'rejected')}>반려</button></div></> : item.review_reason && <p className="review-reason">처리 사유: {item.review_reason}</p>}
         </div>

@@ -268,7 +268,7 @@ body::before, body::after { display: none; }
   position: relative;
   width: 100%;
   justify-content: flex-start;
-  padding: 12px 13px;
+  padding: 12px 46px 12px 13px;
   color: #9096a0;
   background: transparent;
   border: 0;
@@ -463,7 +463,8 @@ footer { color: #9aa0aa; }
   .sidebar-brand { display: none; }
   .profile { padding: 0 0 14px; }
   .sidebar nav { display: flex; gap: 8px; }
-  .sidebar nav button { justify-content: center; }
+  .sidebar nav button { justify-content: center; padding-inline: 12px; }
+  .sidebar nav button i { display: none; }
   .sidebar nav button.active::after { left: 12px; right: 12px; top: auto; bottom: -1px; width: auto; height: 3px; border-radius: 3px 3px 0 0; }
   .sidebar-summary, .sidebar-tip { display: none; }
   .logout { position: absolute; right: 16px; top: 18px; width: auto; margin: 0; min-height: 38px; padding: 7px 12px; }

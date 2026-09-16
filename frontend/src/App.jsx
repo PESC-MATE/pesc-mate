@@ -24,6 +24,7 @@ function App() {
   const [category, setCategory] = useState('전체');
   const [search, setSearch] = useState('');
   const [selectedCard, setSelectedCard] = useState(null);
+  const [showCardForm, setShowCardForm] = useState(false);
   const [tab, setTab] = useState('home');
   const [text, setText] = useState('');
   const [generationSource, setGenerationSource] = useState('');
@@ -263,7 +264,7 @@ function App() {
     </div> : tab === 'catalog' && user.role !== 'caregiver' ? <section className="card-catalog">
       <div className="catalog-toolbar">
         <div><h2>카드 보기</h2><p className="muted">카드를 눌러 그림과 뜻을 확인해 보세요.</p></div>
-        <input aria-label="카드 검색" placeholder="카드 이름 검색" value={search} onChange={event => setSearch(event.target.value)} />
+        <div className="catalog-actions"><input aria-label="카드 검색" placeholder="카드 이름 검색" value={search} onChange={event => setSearch(event.target.value)} /><button className="primary" onClick={() => setShowCardForm(true)}>+ 카드 등록</button></div>
       </div>
       <div className="categories" aria-label="카고리">{['전체', ...new Set(cards.map(card => card.category))].map(item => <button key={item} aria-pressed={category === item} className={category === item ? 'active' : ''} onClick={() => setCategory(item)}>{item}</button>)}</div>
       <div className="catalog-layout">
@@ -276,6 +277,19 @@ function App() {
         </aside>
       </div>
       {loaded && !visibleCards.length && <p className="empty">조건에 맞는 카드가 없어요. 다른 검색어나 카테고리를 선택해 보세요.</p>}
+      {showCardForm && <div className="modal-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setShowCardForm(false); }}>
+        <section className="card-form-modal" role="dialog" aria-modal="true" aria-labelledby="card-form-title">
+          <div className="modal-heading"><div><h2 id="card-form-title">새 카드 등록</h2><p className="muted">등록할 카드의 정보를 입력해 주세요.</p></div><button type="button" aria-label="등록 폼 닫기" onClick={() => setShowCardForm(false)}>×</button></div>
+          <form className="card-form" onSubmit={event => event.preventDefault()}>
+            <label>카드명<input required maxLength="30" placeholder="예: 연필" /></label>
+            <label>카드 뜻<textarea required maxLength="120" rows="3" placeholder="카드가 나타내는 뜻을 적어 주세요." /></label>
+            <label>카테고리<select defaultValue=""><option value="" disabled>카테고리 선택</option>{[...new Set(cards.map(card => card.category))].map(item => <option key={item}>{item}</option>)}</select></label>
+            <label>카드 이미지<input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" /></label>
+            <p className="form-notice">입력한 카드를 관리자에게 제출하는 기능은 다음 개발 단계에서 연결됩니다.</p>
+            <div className="modal-actions"><button type="button" onClick={() => setShowCardForm(false)}>취소</button><button type="submit" className="primary" disabled>승인 요청</button></div>
+          </form>
+        </section>
+      </div>}
     </section> : <section className="dashboard"><div className="panel-heading"><span aria-hidden="true">🏆</span><div><h2>{user.role === 'caregiver' ? '보호 대상 의사소통 기록' : '나의 의사소통 기록'}</h2><p className="muted">{(selectedUser || user).name} · {period === 'all' ? '전체 기간' : `최근 ${period}일`} · 문장 저장 기준</p></div></div>
       {user.role === 'caregiver' && <label className="user-picker">조회 사용자<select value={selectedUser?.id || ''} onChange={event => changeLinkedUser(event.target.value)} disabled={statsBusy}>{linkedUsers.map(person => <option key={person.id} value={person.id}>{person.name} ({person.username})</option>)}</select></label>}
       <div className="period-filter" aria-label="조회 기간">{[['7', '최근 7일'], ['30', '최근 30일'], ['all', '전체']].map(([value, label]) => <button key={value} className={period === value ? 'active' : ''} aria-pressed={period === value} disabled={statsBusy} onClick={() => changePeriod(value)}>{label}</button>)}</div>

@@ -1,11 +1,12 @@
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 from uuid import UUID
 from app.services.communication import CARDS, save_session, statistics
 from app.services.authentication import current_user, dashboard_user, linked_users, login, logout, register, security
 from app.services.model import status as model_status
 from app.services.caregiver_notes import delete_note, notes_for, save_note
+from app.services.card_submissions import MAX_IMAGE_BYTES, create_submission, submissions_for
 
 api_router = APIRouter()
 
@@ -71,6 +72,19 @@ class CardResponse(BaseModel):
     image_index: int
     count: int | None = None
     reason: str | None = None
+
+
+class CardSubmissionResponse(BaseModel):
+    id: str
+    label: str
+    meaning: str
+    category: str
+    visibility: str
+    owner_id: str
+    status: str
+    image_filename: str
+    image_content_type: str
+    created_at: datetime
 
 
 class CommunicationSessionResponse(BaseModel):
@@ -171,6 +185,25 @@ def sign_out(_user=Depends(current_user), credentials=Depends(security)):
 def cards(_=Depends(current_user)):
     require_communicator(_)
     return CARDS
+
+
+@api_router.get('/cards/submissions', response_model=list[CardSubmissionResponse], tags=['카드'])
+def card_submissions(user=Depends(current_user)):
+    require_communicator(user)
+    return submissions_for(user['id'])
+
+
+@api_router.post('/cards/submissions', response_model=CardSubmissionResponse, status_code=201, tags=['카드'])
+async def submit_card(label: str = Form(min_length=1, max_length=30),
+                      meaning: str = Form(min_length=1, max_length=120),
+                      category: str = Form(min_length=1, max_length=30),
+                      visibility: str = Form(),
+                      image: UploadFile = File(),
+                      user=Depends(current_user)):
+    require_communicator(user)
+    image_data = await image.read(MAX_IMAGE_BYTES + 1)
+    return create_submission(user['id'], label, meaning, category, visibility,
+                             image.filename, image.content_type, image_data)
 
 
 @api_router.post('/sentences', response_model=CommunicationSessionResponse, tags=['문장'])

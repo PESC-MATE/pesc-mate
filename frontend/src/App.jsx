@@ -25,6 +25,8 @@ function App() {
   const [search, setSearch] = useState('');
   const [selectedCard, setSelectedCard] = useState(null);
   const [showCardForm, setShowCardForm] = useState(false);
+  const [cardSubmissions, setCardSubmissions] = useState([]);
+  const [cardFormBusy, setCardFormBusy] = useState(false);
   const [tab, setTab] = useState('home');
   const [text, setText] = useState('');
   const [generationSource, setGenerationSource] = useState('');
@@ -59,8 +61,8 @@ function App() {
         setStats(target ? await request(dashboardPath(period, target)) : null); setLoaded(true);
         return;
       }
-      const [all, rec, dashboard] = await Promise.all([request('/cards'), request('/recommendations'), request(dashboardPath())]);
-      setCards(all); setRecommended(rec); setStats(dashboard); setBoard(loadBoard(account?.id, all)); setLoaded(true);
+      const [all, rec, dashboard, submissions] = await Promise.all([request('/cards'), request('/recommendations'), request(dashboardPath()), request('/cards/submissions')]);
+      setCards(all); setRecommended(rec); setStats(dashboard); setCardSubmissions(submissions); setBoard(loadBoard(account?.id, all)); setLoaded(true);
     } catch (e) {
       if (e.status === 401) { setToken(null); setUser(null); setLoaded(false); setError('로그인이 만료되었습니다. 다시 로그인해 주세요.'); }
       else setError(e.message || '서버에 연결하지 못했습니다.');
@@ -99,7 +101,7 @@ function App() {
     try { await request('/auth/logout', { method: 'POST' }); } catch { /* local logout still applies */ }
     clearBoard(user?.id);
     window.speechSynthesis?.cancel(); setToken(null); setUser(null); setLoaded(false);
-    setCards([]); setRecommended([]); setStats(null); setBoard([]); setLinkedUsers([]); setSelectedUser(null); setText(''); setError(''); setTab('home'); setBusy(false);
+    setCards([]); setRecommended([]); setStats(null); setBoard([]); setCardSubmissions([]); setLinkedUsers([]); setSelectedUser(null); setText(''); setError(''); setTab('home'); setBusy(false);
   }
 
   function updateBoard(next) {
@@ -172,6 +174,18 @@ function App() {
       setNoteDrafts(current => ({ ...current, [sessionId]: '' }));
     } catch (e) { setError(e.message); }
     finally { setNoteBusy(''); }
+  }
+  async function submitCard(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    setCardFormBusy(true); setError('');
+    try {
+      const saved = await request('/cards/submissions', { method: 'POST', body: new FormData(form) });
+      setCardSubmissions(current => [saved, ...current]);
+      setShowCardForm(false);
+      form.reset();
+    } catch (e) { setError(e.message); }
+    finally { setCardFormBusy(false); }
   }
   function artStyle(card) {
     return { backgroundImage: `url(${cardSprite})`, backgroundPosition: `${(card.image_index % 6) * 20}% ${Math.floor(card.image_index / 6) * 50}%` };
@@ -276,17 +290,19 @@ function App() {
           {selectedCard ? <><span className="detail-art" role="img" aria-label={`${selectedCard.label} 그림`} style={artStyle(selectedCard)} /><span className="detail-category">{selectedCard.category}</span><h3>{selectedCard.label}</h3><p>{selectedCard.label}을(를) 표현하는 PECS 카드예요.</p><button className="primary" onClick={() => { add(selectedCard); setTab('cards'); }}>문장에 사용하기</button></> : <div className="detail-empty"><span aria-hidden="true">👆</span><strong>카드를 선택해 주세요</strong><p>선택한 카드의 그림과 뜻이 여기에 보여요.</p></div>}
         </aside>
       </div>
+      <div className="submission-list"><h3>나의 등록 요청</h3>{cardSubmissions.length ? <ul>{cardSubmissions.map(item => <li key={item.id}><span><strong>{item.label}</strong><small>{item.category} · {item.visibility === 'private' ? '나만 사용' : '공개 요청'}</small></span><b className={`submission-status ${item.status}`}>{item.status === 'pending' ? '승인 대기' : item.status}</b></li>)}</ul> : <p className="muted">아직 등록한 카드가 없어요.</p>}</div>
       {loaded && !visibleCards.length && <p className="empty">조건에 맞는 카드가 없어요. 다른 검색어나 카테고리를 선택해 보세요.</p>}
       {showCardForm && <div className="modal-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setShowCardForm(false); }}>
         <section className="card-form-modal" role="dialog" aria-modal="true" aria-labelledby="card-form-title">
           <div className="modal-heading"><div><h2 id="card-form-title">새 카드 등록</h2><p className="muted">등록할 카드의 정보를 입력해 주세요.</p></div><button type="button" aria-label="등록 폼 닫기" onClick={() => setShowCardForm(false)}>×</button></div>
-          <form className="card-form" onSubmit={event => event.preventDefault()}>
-            <label>카드명<input required maxLength="30" placeholder="예: 연필" /></label>
-            <label>카드 뜻<textarea required maxLength="120" rows="3" placeholder="카드가 나타내는 뜻을 적어 주세요." /></label>
-            <label>카테고리<select defaultValue=""><option value="" disabled>카테고리 선택</option>{[...new Set(cards.map(card => card.category))].map(item => <option key={item}>{item}</option>)}</select></label>
-            <label>카드 이미지<input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" /></label>
-            <p className="form-notice">입력한 카드를 관리자에게 제출하는 기능은 다음 개발 단계에서 연결됩니다.</p>
-            <div className="modal-actions"><button type="button" onClick={() => setShowCardForm(false)}>취소</button><button type="submit" className="primary" disabled>승인 요청</button></div>
+          <form className="card-form" onSubmit={submitCard}>
+            <label>카드명<input name="label" required maxLength="30" placeholder="예: 연필" /></label>
+            <label>카드 뜻<textarea name="meaning" required maxLength="120" rows="3" placeholder="카드가 나타내는 뜻을 적어 주세요." /></label>
+            <label>카테고리<select name="category" required defaultValue=""><option value="" disabled>카테고리 선택</option>{[...new Set(cards.map(card => card.category))].map(item => <option key={item}>{item}</option>)}</select></label>
+            <label>공개 범위<select name="visibility" defaultValue="private"><option value="private">승인 후 나만 사용</option><option value="shared">승인 후 모든 사용자에게 공개 요청</option></select></label>
+            <label>카드 이미지<input name="image" required type="file" accept="image/jpeg,image/png,image/webp" capture="environment" /></label>
+            <p className="form-notice">제출한 카드는 관리자 승인 전까지 그림으로 말하기에 표시되지 않아요. JPG, PNG, WebP 파일을 5MB 이하로 올려 주세요.</p>
+            <div className="modal-actions"><button type="button" disabled={cardFormBusy} onClick={() => setShowCardForm(false)}>취소</button><button type="submit" className="primary" disabled={cardFormBusy}>{cardFormBusy ? '제출 중…' : '승인 요청'}</button></div>
           </form>
         </section>
       </div>}

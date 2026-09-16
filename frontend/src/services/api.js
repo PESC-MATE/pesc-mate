@@ -13,11 +13,12 @@ export function hasToken() {
 }
 
 export async function request(path, options = {}) {
+  const isFormData = options.body instanceof FormData;
   const response = await fetch(`${API_BASE_URL}/api${path}`, {
     ...options,
     signal: AbortSignal.timeout(15000),
     headers: {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...(localStorage.getItem(TOKEN_KEY) ? { Authorization: `Bearer ${localStorage.getItem(TOKEN_KEY)}` } : {}),
       ...options.headers,
     },

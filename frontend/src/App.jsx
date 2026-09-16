@@ -334,7 +334,7 @@ function App() {
             <label>카테고리<select name="category" required defaultValue=""><option value="" disabled>카테고리 선택</option>{[...new Set(cards.map(card => card.category))].map(item => <option key={item}>{item}</option>)}</select></label>
             <label>공개 범위<select name="visibility" defaultValue="private"><option value="private">승인 후 나만 사용</option><option value="shared">승인 후 모든 사용자에게 공개 요청</option></select></label>
             <label>카드 이미지<input name="image" required type="file" accept="image/jpeg,image/png,image/webp" capture="environment" /></label>
-            <p className="form-notice">제출한 카드는 관리자 승인 전까지 그림으로 말하기에 표시되지 않아요. JPG, PNG, WebP 파일을 5MB 이하로 올려 주세요.</p>
+            <p className="form-notice">제출한 카드는 관리자 승인 전까지 그림으로 말하기에 표시되지 않아요. JPG, PNG, WebP 파일을 5MB 이하, 가로·세로 128~4096px로 올려 주세요.</p>
             <div className="modal-actions"><button type="button" disabled={cardFormBusy} onClick={() => setShowCardForm(false)}>취소</button><button type="submit" className="primary" disabled={cardFormBusy}>{cardFormBusy ? '제출 중…' : '승인 요청'}</button></div>
           </form>
         </section>

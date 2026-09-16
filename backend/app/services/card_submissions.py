@@ -1,14 +1,21 @@
 """User card submissions waiting for administrator review."""
 from datetime import datetime, timezone
+from io import BytesIO
 from uuid import uuid4
+import warnings
 
 from fastapi import HTTPException
+from PIL import Image, ImageOps, UnidentifiedImageError
 from pymongo.errors import PyMongoError
 
 from app.services.database import database, log_crud
 
 ALLOWED_IMAGE_TYPES = {'image/jpeg', 'image/png', 'image/webp'}
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
+MIN_IMAGE_EDGE = 128
+MAX_IMAGE_EDGE = 4096
+MAX_IMAGE_PIXELS = 16_000_000
+IMAGE_FORMAT_TYPES = {'JPEG': 'image/jpeg', 'PNG': 'image/png', 'WEBP': 'image/webp'}
 
 
 def _collection():
@@ -38,6 +45,38 @@ def _public(document):
     }
 
 
+def _normalize_image(image_data, declared_content_type):
+    if declared_content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(422, 'JPG, PNG, WebP 이미지만 등록할 수 있습니다.')
+    if not image_data or len(image_data) > MAX_IMAGE_BYTES:
+        raise HTTPException(422, '이미지는 5MB 이하로 등록해 주세요.')
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter('error', Image.DecompressionBombWarning)
+            with Image.open(BytesIO(image_data)) as probe:
+                actual_content_type = IMAGE_FORMAT_TYPES.get(probe.format)
+                width, height = probe.size
+                probe.verify()
+        if actual_content_type != declared_content_type:
+            raise HTTPException(422, '파일 형식과 이미지 내용이 일치하지 않습니다.')
+        if (min(width, height) < MIN_IMAGE_EDGE or max(width, height) > MAX_IMAGE_EDGE
+                or width * height > MAX_IMAGE_PIXELS):
+            raise HTTPException(422, '이미지 해상도는 가로·세로 128~4096px 범위여야 합니다.')
+        with Image.open(BytesIO(image_data)) as source:
+            source.seek(0)
+            normalized = ImageOps.exif_transpose(source)
+            normalized.load()
+            normalized = normalized.convert('RGBA' if 'A' in normalized.getbands() else 'RGB')
+            output = BytesIO()
+            normalized.save(output, format='WEBP', quality=88, method=4)
+            return output.getvalue(), 'image/webp'
+    except HTTPException:
+        raise
+    except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError,
+            Image.DecompressionBombWarning) as exc:
+        raise HTTPException(422, '손상되었거나 안전하게 처리할 수 없는 이미지입니다.') from exc
+
+
 def create_submission(owner_id, label, meaning, category, visibility,
                       image_filename, image_content_type, image_data):
     label = label.strip()
@@ -47,10 +86,7 @@ def create_submission(owner_id, label, meaning, category, visibility,
         raise HTTPException(422, '카드명과 뜻, 카테고리를 모두 입력해 주세요.')
     if visibility not in {'private', 'shared'}:
         raise HTTPException(422, '공개 범위가 올바르지 않습니다.')
-    if image_content_type not in ALLOWED_IMAGE_TYPES:
-        raise HTTPException(422, 'JPG, PNG, WebP 이미지만 등록할 수 있습니다.')
-    if not image_data or len(image_data) > MAX_IMAGE_BYTES:
-        raise HTTPException(422, '이미지는 5MB 이하로 등록해 주세요.')
+    safe_image_data, safe_content_type = _normalize_image(image_data, image_content_type)
 
     document = {
         '_id': str(uuid4()),
@@ -61,9 +97,10 @@ def create_submission(owner_id, label, meaning, category, visibility,
         'owner_id': owner_id,
         'status': 'pending',
         'image': {
-            'filename': image_filename or 'card-image',
-            'content_type': image_content_type,
-            'data': image_data,
+            'filename': 'card-image.webp',
+            'original_filename': image_filename or 'card-image',
+            'content_type': safe_content_type,
+            'data': safe_image_data,
         },
         'created_at': datetime.now(timezone.utc),
     }

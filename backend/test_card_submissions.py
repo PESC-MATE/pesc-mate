@@ -1,8 +1,10 @@
 import unittest
 from copy import deepcopy
+from io import BytesIO
 from unittest.mock import patch
 
 from fastapi import HTTPException
+from PIL import Image
 
 from app.services.card_submissions import (
     approved_cards_for, create_submission, image_for, review_submission,
@@ -47,6 +49,9 @@ class CardSubmissionTests(unittest.TestCase):
         self.audit_mock = patch('app.services.card_submissions._audit_collection', return_value=self.audit_collection)
         self.mock.start()
         self.audit_mock.start()
+        output = BytesIO()
+        Image.new('RGB', (256, 256), '#ffffff').save(output, format='PNG')
+        self.image = output.getvalue()
 
     def tearDown(self):
         self.mock.stop()
@@ -55,7 +60,7 @@ class CardSubmissionTests(unittest.TestCase):
     def test_submission_is_pending_and_scoped_to_owner(self):
         saved = create_submission(
             'demo', '연필', '글을 쓰는 도구', '학습', 'private',
-            'pencil.png', 'image/png', b'png data',
+            'pencil.png', 'image/png', self.image,
         )
         self.assertEqual(saved['status'], 'pending')
         self.assertEqual(saved['owner_id'], 'demo')
@@ -72,25 +77,42 @@ class CardSubmissionTests(unittest.TestCase):
 
     def test_admin_approval_exposes_card_without_removing_defaults(self):
         saved = create_submission('demo', '연필', '글을 쓰는 도구', '학습', 'private',
-                                  'pencil.png', 'image/png', b'png data')
+                                  'pencil.png', 'image/png', self.image)
         approved = review_submission(saved['id'], 'admin', 'approved', '')
         self.assertEqual(approved['status'], 'approved')
         cards = approved_cards_for('demo')
         self.assertEqual(cards[0]['label'], '연필')
         self.assertEqual(approved_cards_for('another-user'), [])
         image, content_type = image_for(saved['id'], {'id': 'demo', 'role': 'user'})
-        self.assertEqual((image, content_type), (b'png data', 'image/png'))
+        self.assertTrue(image.startswith(b'RIFF'))
+        self.assertEqual(content_type, 'image/webp')
         self.assertEqual(len(self.audit_collection.documents), 1)
 
     def test_rejection_requires_reason_and_prevents_second_review(self):
         saved = create_submission('demo', '연필', '뜻', '학습', 'shared',
-                                  'pencil.png', 'image/png', b'png data')
+                                  'pencil.png', 'image/png', self.image)
         with self.assertRaises(HTTPException):
             review_submission(saved['id'], 'admin', 'rejected', '')
         review_submission(saved['id'], 'admin', 'rejected', '이미지를 확인해 주세요.')
         with self.assertRaises(HTTPException) as caught:
             review_submission(saved['id'], 'admin', 'approved', '')
         self.assertEqual(caught.exception.status_code, 409)
+
+    def test_image_content_and_resolution_are_verified(self):
+        with self.assertRaises(HTTPException) as mismatch:
+            create_submission('demo', '연필', '뜻', '학습', 'private',
+                              'pencil.jpg', 'image/jpeg', self.image)
+        self.assertEqual(mismatch.exception.status_code, 422)
+        small = BytesIO()
+        Image.new('RGB', (64, 64)).save(small, format='PNG')
+        with self.assertRaises(HTTPException) as resolution:
+            create_submission('demo', '연필', '뜻', '학습', 'private',
+                              'small.png', 'image/png', small.getvalue())
+        self.assertEqual(resolution.exception.status_code, 422)
+        with self.assertRaises(HTTPException) as corrupt:
+            create_submission('demo', '연필', '뜻', '학습', 'private',
+                              'fake.png', 'image/png', b'not an image')
+        self.assertEqual(corrupt.exception.status_code, 422)
 
 
 if __name__ == '__main__':

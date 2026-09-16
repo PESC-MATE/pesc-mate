@@ -378,10 +378,12 @@ Content-Type: multipart/form-data
 | `meaning` | string | 1~120자 |
 | `category` | string | 1~30자 |
 | `visibility` | string | `private` 또는 `shared` |
-| `image` | file | JPG, PNG, WebP, 최대 5MB |
+| `image` | file | JPG, PNG, WebP, 최대 5MB, 가로·세로 128~4096px |
 
 인증된 일반 사용자만 요청할 수 있다. 소유자는 인증 정보로
 설정되며 상태는 `pending`으로 저장된다. 성공 시 `201 Created`를 반환한다.
+서버는 실제 이미지 형식과 선언된 MIME을 비교하고, 디코딩과 해상도 검증 후
+메타데이터와 부가 데이터를 제거한 WebP로 재인코딩해 저장한다.
 
 ## 7.3 본인 카드 등록 요청 조회
 

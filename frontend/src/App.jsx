@@ -28,6 +28,7 @@ function App() {
   const [cardSubmissions, setCardSubmissions] = useState([]);
   const [cardFormBusy, setCardFormBusy] = useState(false);
   const [cardFormError, setCardFormError] = useState('');
+  const [editingSubmission, setEditingSubmission] = useState(null);
   const [adminSubmissions, setAdminSubmissions] = useState([]);
   const [reviewDrafts, setReviewDrafts] = useState({});
   const [reviewBusy, setReviewBusy] = useState('');
@@ -194,9 +195,16 @@ function App() {
     formData.set('submission_mode', event.nativeEvent.submitter?.value || 'submit');
     setCardFormBusy(true); setCardFormError(''); setError('');
     try {
-      const saved = await request('/cards/submissions', { method: 'POST', body: formData });
-      setCardSubmissions(current => [saved, ...current]);
+      const saved = editingSubmission
+        ? await request(`/cards/submissions/${editingSubmission.id}`, {
+          method: 'PATCH', body: JSON.stringify(Object.fromEntries(['label', 'meaning', 'category', 'visibility'].map(key => [key, formData.get(key)]))),
+        })
+        : await request('/cards/submissions', { method: 'POST', body: formData });
+      setCardSubmissions(current => editingSubmission
+        ? current.map(item => item.id === saved.id ? saved : item)
+        : [saved, ...current]);
       setShowCardForm(false);
+      setEditingSubmission(null);
       form.reset();
     } catch (e) { setCardFormError(e.message); }
     finally { setCardFormBusy(false); }
@@ -328,7 +336,7 @@ function App() {
     </div> : tab === 'catalog' && user.role !== 'caregiver' ? <section className="card-catalog">
       <div className="catalog-toolbar">
         <div><h2>카드 보기</h2><p className="muted">카드를 눌러 그림과 뜻을 확인해 보세요.</p></div>
-        <div className="catalog-actions"><input aria-label="카드 검색" placeholder="카드 이름 검색" value={search} onChange={event => setSearch(event.target.value)} /><button className="primary" onClick={() => { setCardFormError(''); setShowCardForm(true); }}>+ 카드 등록</button></div>
+        <div className="catalog-actions"><input aria-label="카드 검색" placeholder="카드 이름 검색" value={search} onChange={event => setSearch(event.target.value)} /><button className="primary" onClick={() => { setEditingSubmission(null); setCardFormError(''); setShowCardForm(true); }}>+ 카드 등록</button></div>
       </div>
       <div className="categories" aria-label="카고리">{['전체', ...new Set(cards.map(card => card.category))].map(item => <button key={item} aria-pressed={category === item} className={category === item ? 'active' : ''} onClick={() => setCategory(item)}>{item}</button>)}</div>
       <div className="catalog-layout">
@@ -340,20 +348,20 @@ function App() {
           {selectedCard ? <>{cardArt(selectedCard, 'detail-art')}<span className="detail-category">{selectedCard.category}</span><h3>{selectedCard.label}</h3><p>{selectedCard.label}을(를) 표현하는 PECS 카드예요.</p><button className="primary" onClick={() => { add(selectedCard); setTab('cards'); }}>문장에 사용하기</button></> : <div className="detail-empty"><span aria-hidden="true">👆</span><strong>카드를 선택해 주세요</strong><p>선택한 카드의 그림과 뜻이 여기에 보여요.</p></div>}
         </aside>
       </div>
-      <div className="submission-list"><h3>나의 등록 요청</h3>{cardSubmissions.length ? <ul>{cardSubmissions.map(item => <li key={item.id}><span><strong>{item.label}</strong><small>{item.category} · {item.visibility === 'private' ? '나만 사용' : '공개 요청'}</small></span><div className="submission-actions"><b className={`submission-status ${item.status}`}>{({ draft: '작성 중', pending: '승인 대기', approved: '승인', rejected: '반려', inactive: '비활성' })[item.status] || item.status}</b>{item.status === 'draft' && <button className="primary" disabled={reviewBusy === item.id} onClick={() => submitDraft(item)}>승인 요청</button>}</div></li>)}</ul> : <p className="muted">아직 등록한 카드가 없어요.</p>}</div>
+      <div className="submission-list"><h3>나의 등록 요청</h3>{cardSubmissions.length ? <ul>{cardSubmissions.map(item => <li key={item.id}><span><strong>{item.label}</strong><small>{item.category} · {item.visibility === 'private' ? '나만 사용' : '공개 요청'}</small></span><div className="submission-actions"><b className={`submission-status ${item.status}`}>{({ draft: '작성 중', pending: '승인 대기', approved: '승인', rejected: '반려', inactive: '비활성' })[item.status] || item.status}</b>{['draft', 'rejected'].includes(item.status) && <button disabled={reviewBusy === item.id} onClick={() => { setEditingSubmission(item); setCardFormError(''); setShowCardForm(true); }}>수정</button>}{item.status === 'draft' && <button className="primary" disabled={reviewBusy === item.id} onClick={() => submitDraft(item)}>승인 요청</button>}</div></li>)}</ul> : <p className="muted">아직 등록한 카드가 없어요.</p>}</div>
       {loaded && !visibleCards.length && <p className="empty">조건에 맞는 카드가 없어요. 다른 검색어나 카테고리를 선택해 보세요.</p>}
       {showCardForm && <div className="modal-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setShowCardForm(false); }}>
         <section className="card-form-modal" role="dialog" aria-modal="true" aria-labelledby="card-form-title">
-          <div className="modal-heading"><div><h2 id="card-form-title">새 카드 등록</h2><p className="muted">등록할 카드의 정보를 입력해 주세요.</p></div><button type="button" aria-label="등록 폼 닫기" onClick={() => setShowCardForm(false)}>×</button></div>
-          <form className="card-form" onSubmit={submitCard}>
+          <div className="modal-heading"><div><h2 id="card-form-title">{editingSubmission ? '카드 수정' : '새 카드 등록'}</h2><p className="muted">{editingSubmission ? '반려 사유를 확인하고 정보를 수정해 주세요.' : '등록할 카드의 정보를 입력해 주세요.'}</p></div><button type="button" aria-label="등록 폼 닫기" onClick={() => { setShowCardForm(false); setEditingSubmission(null); }}>×</button></div>
+          <form key={editingSubmission?.id || 'new'} className="card-form" onSubmit={submitCard}>
             {cardFormError && <div role="alert" className="error">{cardFormError}</div>}
-            <label>카드명<input name="label" required maxLength="30" placeholder="예: 연필" /></label>
-            <label>카드 뜻<textarea name="meaning" required maxLength="120" rows="3" placeholder="카드가 나타내는 뜻을 적어 주세요." /></label>
-            <label>카테고리<select name="category" required defaultValue=""><option value="" disabled>카테고리 선택</option>{[...new Set(cards.map(card => card.category))].map(item => <option key={item}>{item}</option>)}</select></label>
-            <label>공개 범위<select name="visibility" defaultValue="private"><option value="private">승인 후 나만 사용</option><option value="shared">승인 후 모든 사용자에게 공개 요청</option></select></label>
-            <label>카드 이미지<input name="image" required type="file" accept="image/jpeg,image/png,image/webp" capture="environment" /></label>
+            <label>카드명<input name="label" required maxLength="30" placeholder="예: 연필" defaultValue={editingSubmission?.label || ''} /></label>
+            <label>카드 뜻<textarea name="meaning" required maxLength="120" rows="3" placeholder="카드가 나타내는 뜻을 적어 주세요." defaultValue={editingSubmission?.meaning || ''} /></label>
+            <label>카테고리<select name="category" required defaultValue={editingSubmission?.category || ''}><option value="" disabled>카테고리 선택</option>{[...new Set(cards.map(card => card.category))].map(item => <option key={item}>{item}</option>)}</select></label>
+            <label>공개 범위<select name="visibility" defaultValue={editingSubmission?.visibility || 'private'}><option value="private">승인 후 나만 사용</option><option value="shared">승인 후 모든 사용자에게 공개 요청</option></select></label>
+            {!editingSubmission && <label>카드 이미지<input name="image" required type="file" accept="image/jpeg,image/png,image/webp" capture="environment" /></label>}
             <p className="form-notice">제출한 카드는 관리자 승인 전까지 그림으로 말하기에 표시되지 않아요. JPG, PNG, WebP 파일을 5MB 이하, 가로·세로 128~4096px로 올려 주세요.</p>
-            <div className="modal-actions"><button type="button" disabled={cardFormBusy} onClick={() => setShowCardForm(false)}>취소</button><button type="submit" value="draft" disabled={cardFormBusy}>임시 저장</button><button type="submit" value="submit" className="primary" disabled={cardFormBusy}>{cardFormBusy ? '저장 중…' : '승인 요청'}</button></div>
+            <div className="modal-actions"><button type="button" disabled={cardFormBusy} onClick={() => { setShowCardForm(false); setEditingSubmission(null); }}>취소</button>{!editingSubmission && <button type="submit" value="draft" disabled={cardFormBusy}>임시 저장</button>}<button type="submit" value="submit" className="primary" disabled={cardFormBusy}>{cardFormBusy ? '저장 중…' : editingSubmission ? '수정 저장' : '승인 요청'}</button></div>
           </form>
         </section>
       </div>}

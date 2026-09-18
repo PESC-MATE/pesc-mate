@@ -8,7 +8,7 @@ from PIL import Image
 
 from app.services.card_submissions import (
     approved_cards_for, create_submission, image_for, review_submission,
-    submissions_for, submissions_for_review, submit_draft,
+    submissions_for, submissions_for_review, submit_draft, update_submission,
 )
 
 
@@ -106,6 +106,9 @@ class CardSubmissionTests(unittest.TestCase):
                                   'pencil.png', 'image/png', self.image, 'draft')
         self.assertEqual(draft['status'], 'draft')
         self.assertEqual(submissions_for_review(), [])
+        edited = update_submission(draft['id'], 'demo', '색연필', '색을 칠하는 도구', '학습', 'private')
+        self.assertEqual(edited['label'], '색연필')
+        self.assertEqual(edited['status'], 'draft')
         pending = submit_draft(draft['id'], 'demo')
         self.assertEqual(pending['status'], 'pending')
         approved = review_submission(draft['id'], 'admin', 'approved')
@@ -115,7 +118,10 @@ class CardSubmissionTests(unittest.TestCase):
         self.assertEqual(approved_cards_for('demo'), [])
         restored = review_submission(draft['id'], 'admin', 'approved', '재활성')
         self.assertEqual(restored['status'], 'approved')
-        self.assertEqual(len(self.audit_collection.documents), 5)
+        self.assertEqual(len(self.audit_collection.documents), 6)
+        with self.assertRaises(HTTPException) as approved_edit:
+            update_submission(draft['id'], 'demo', '연필', '뜻', '학습', 'private')
+        self.assertEqual(approved_edit.exception.status_code, 409)
 
     def test_image_content_and_resolution_are_verified(self):
         with self.assertRaises(HTTPException) as mismatch:

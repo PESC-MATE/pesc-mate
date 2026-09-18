@@ -82,6 +82,7 @@ Authorization: Bearer {access_token}
 | 카드 | GET | `/api/cards/submissions` | 필요 | 본인 카드 등록 요청 조회 |
 | 카드 | POST | `/api/cards/submissions` | 필요 | 카드 승인 요청 저장 |
 | 카드 | POST | `/api/cards/submissions/{id}/submit` | 필요 | 임시 저장 카드를 승인 대기로 제출 |
+| 카드 | PATCH | `/api/cards/submissions/{id}` | 필요 | 작성 중·반려 카드 정보 수정 |
 | 카드 | GET | `/api/cards/submissions/{id}/image` | 필요 | 권한이 있는 카드 이미지 조회 |
 | 관리자 | GET | `/api/admin/card-submissions` | 관리자 | 전체 카드 요청 조회 |
 | 관리자 | PATCH | `/api/admin/card-submissions/{id}` | 관리자 | 카드 승인 또는 반려 |
@@ -401,6 +402,9 @@ Authorization: Bearer {access_token}
 ```
 
 현재 로그인한 사용자가 제출한 요청만 최신순으로 반환한다.
+작성 중이거나 반려된 카드는 `PATCH /api/cards/submissions/{id}`로
+카드명, 뜻, 카테고리, 공개 범위를 수정할 수 있다. 반려 카드를 수정하면
+작성 중 상태로 전환되며, 승인 대기로 다시 제출해야 한다.
 
 ## 7.4 카드 승인·반려
 
@@ -642,7 +646,7 @@ curl "http://127.0.0.1:8000/api/dashboard?days=7" \
 | 현재 사용자 | `auth_sessions`, `users` | 세션 및 사용자 조회 |
 | 로그아웃 | `auth_sessions` | 세션 삭제 |
 | 카드 등록 | `card_submissions` | 제출, 승인·반려 저장 및 사용자 카드 조회 |
-| 카드 감사 | `card_audit_logs` | 관리자 승인·반려 행위자와 시각 저장 |
+| 카드 감사 | `card_audit_logs` | 등록·제출·수정·승인·반려·비활성 행위자와 시각 저장 |
 | 문장 생성 | `communication_sessions` | 중복 확인 및 문장 기록 생성 |
 | 추천 | `communication_sessions` | 로그인 사용자 전체 기록 조회 |
 | 이용 현황 | `communication_sessions` | 사용자 및 기간 조건 조회 |

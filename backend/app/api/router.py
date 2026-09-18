@@ -10,6 +10,7 @@ from app.services.caregiver_notes import delete_note, notes_for, save_note
 from app.services.card_submissions import (
     MAX_IMAGE_BYTES, approved_cards_for, create_submission, image_for,
     review_submission, submissions_for, submissions_for_review, submit_draft,
+    update_submission,
 )
 
 api_router = APIRouter()
@@ -101,6 +102,13 @@ class CardSubmissionResponse(BaseModel):
 class CardReviewRequest(BaseModel):
     decision: Literal['approved', 'rejected', 'inactive']
     reason: str = Field(default='', max_length=500)
+
+
+class CardUpdateRequest(BaseModel):
+    label: str = Field(min_length=1, max_length=30)
+    meaning: str = Field(min_length=1, max_length=120)
+    category: str = Field(min_length=1, max_length=30)
+    visibility: Literal['private', 'shared']
 
 
 class CommunicationSessionResponse(BaseModel):
@@ -233,6 +241,14 @@ async def submit_card(label: str = Form(min_length=1, max_length=30),
 def request_card_review(submission_id: str, user=Depends(current_user)):
     require_communicator(user)
     return submit_draft(submission_id, user['id'])
+
+
+@api_router.patch('/cards/submissions/{submission_id}', response_model=CardSubmissionResponse, tags=['카드'])
+def edit_card_submission(submission_id: str, request: CardUpdateRequest,
+                         user=Depends(current_user)):
+    require_communicator(user)
+    return update_submission(submission_id, user['id'], request.label, request.meaning,
+                             request.category, request.visibility)
 
 
 @api_router.get('/cards/submissions/{submission_id}/image', tags=['카드'])

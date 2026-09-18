@@ -65,12 +65,13 @@ def _validate_text(label, meaning):
         raise HTTPException(422, '적절하지 않은 표현은 카드에 사용할 수 없습니다.')
 
 
-def _ensure_unique_label(collection, normalized_label):
+def _ensure_unique_label(collection, normalized_label, exclude_id=None):
     from app.services.communication import CARDS
     if normalized_label in {_compact_text(card['label']) for card in CARDS}:
         raise HTTPException(409, '이미 등록된 카드명입니다.')
     duplicate = next((row for row in collection.find({})
-                      if row.get('status') != 'rejected'
+                      if row['_id'] != exclude_id
+                      and row.get('status') != 'rejected'
                       and _compact_text(row['label']) == normalized_label), None)
     if duplicate:
         raise HTTPException(409, '이미 등록되었거나 승인 대기 중인 카드명입니다.')
@@ -243,6 +244,47 @@ def submit_draft(submission_id, owner_id):
         raise
     except PyMongoError as exc:
         raise HTTPException(503, '카드 승인 요청을 저장하지 못했습니다.') from exc
+
+
+def update_submission(submission_id, owner_id, label, meaning, category, visibility):
+    label = label.strip()
+    meaning = meaning.strip()
+    category = category.strip()
+    if not label or not meaning or not category:
+        raise HTTPException(422, '카드명과 뜻, 카테고리를 모두 입력해 주세요.')
+    _validate_text(label, meaning)
+    if visibility not in {'private', 'shared'}:
+        raise HTTPException(422, '공개 범위가 올바르지 않습니다.')
+    try:
+        collection = _collection()
+        document = collection.find_one({'_id': submission_id, 'owner_id': owner_id})
+        if not document:
+            raise HTTPException(404, '수정할 카드를 찾을 수 없습니다.')
+        if document['status'] not in {'draft', 'rejected'}:
+            raise HTTPException(409, '작성 중이거나 반려된 카드만 수정할 수 있습니다.')
+        normalized_label = _compact_text(label)
+        _ensure_unique_label(collection, normalized_label, submission_id)
+        updated_at = datetime.now(timezone.utc)
+        changes = {
+            'label': label, 'normalized_label': normalized_label, 'meaning': meaning,
+            'category': category, 'visibility': visibility, 'status': 'draft',
+            'review_reason': None, 'reviewer_id': None, 'reviewed_at': None,
+            'updated_at': updated_at,
+        }
+        collection.update_one({'_id': submission_id, 'owner_id': owner_id,
+                               'status': document['status']}, {'$set': changes})
+        _audit_collection().insert_one({
+            '_id': str(uuid4()), 'card_submission_id': submission_id,
+            'actor_id': owner_id, 'action': 'updated',
+            'reason': None, 'created_at': updated_at,
+        })
+        log_crud('UPDATE', 'card_submissions', '카드 정보 수정')
+        log_crud('CREATE', 'card_audit_logs', '카드 수정 작업 기록')
+        return _public(document | changes)
+    except HTTPException:
+        raise
+    except PyMongoError as exc:
+        raise HTTPException(503, '카드 수정 내용을 저장하지 못했습니다.') from exc
 
 
 def approved_cards_for(owner_id):

@@ -9,7 +9,7 @@ from app.services.model import status as model_status
 from app.services.caregiver_notes import delete_note, notes_for, save_note
 from app.services.card_submissions import (
     MAX_IMAGE_BYTES, approved_cards_for, create_submission, image_for,
-    review_submission, submissions_for, submissions_for_review,
+    review_submission, submissions_for, submissions_for_review, submit_draft,
 )
 
 api_router = APIRouter()
@@ -99,7 +99,7 @@ class CardSubmissionResponse(BaseModel):
 
 
 class CardReviewRequest(BaseModel):
-    decision: Literal['approved', 'rejected']
+    decision: Literal['approved', 'rejected', 'inactive']
     reason: str = Field(default='', max_length=500)
 
 
@@ -220,12 +220,19 @@ async def submit_card(label: str = Form(min_length=1, max_length=30),
                       meaning: str = Form(min_length=1, max_length=120),
                       category: str = Form(min_length=1, max_length=30),
                       visibility: str = Form(),
+                      submission_mode: str = Form(default='submit'),
                       image: UploadFile = File(),
                       user=Depends(current_user)):
     require_communicator(user)
     image_data = await image.read(MAX_IMAGE_BYTES + 1)
     return create_submission(user['id'], label, meaning, category, visibility,
-                             image.filename, image.content_type, image_data)
+                             image.filename, image.content_type, image_data, submission_mode)
+
+
+@api_router.post('/cards/submissions/{submission_id}/submit', response_model=CardSubmissionResponse, tags=['카드'])
+def request_card_review(submission_id: str, user=Depends(current_user)):
+    require_communicator(user)
+    return submit_draft(submission_id, user['id'])
 
 
 @api_router.get('/cards/submissions/{submission_id}/image', tags=['카드'])

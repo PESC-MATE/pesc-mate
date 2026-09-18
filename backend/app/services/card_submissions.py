@@ -109,7 +109,8 @@ def _normalize_image(image_data, declared_content_type):
 
 
 def create_submission(owner_id, label, meaning, category, visibility,
-                      image_filename, image_content_type, image_data):
+                      image_filename, image_content_type, image_data,
+                      submission_mode='submit'):
     label = label.strip()
     meaning = meaning.strip()
     category = category.strip()
@@ -118,6 +119,8 @@ def create_submission(owner_id, label, meaning, category, visibility,
     _validate_text(label, meaning)
     if visibility not in {'private', 'shared'}:
         raise HTTPException(422, '공개 범위가 올바르지 않습니다.')
+    if submission_mode not in {'draft', 'submit'}:
+        raise HTTPException(422, '저장 방식이 올바르지 않습니다.')
     safe_image_data, safe_content_type = _normalize_image(image_data, image_content_type)
 
     normalized_label = _compact_text(label)
@@ -129,7 +132,7 @@ def create_submission(owner_id, label, meaning, category, visibility,
         'category': category,
         'visibility': visibility,
         'owner_id': owner_id,
-        'status': 'pending',
+        'status': 'draft' if submission_mode == 'draft' else 'pending',
         'image': {
             'filename': 'card-image.webp',
             'original_filename': image_filename or 'card-image',
@@ -142,11 +145,17 @@ def create_submission(owner_id, label, meaning, category, visibility,
         collection = _collection()
         collection.create_index(
             'normalized_label', unique=True,
-            partialFilterExpression={'status': {'$in': ['pending', 'approved']}},
+            partialFilterExpression={'status': {'$in': ['draft', 'pending', 'approved']}},
         )
         _ensure_unique_label(collection, normalized_label)
         collection.insert_one(document)
+        _audit_collection().insert_one({
+            '_id': str(uuid4()), 'card_submission_id': document['_id'],
+            'actor_id': owner_id, 'action': document['status'],
+            'reason': None, 'created_at': document['created_at'],
+        })
         log_crud('CREATE', 'card_submissions', '카드 승인 요청 저장')
+        log_crud('CREATE', 'card_audit_logs', '카드 등록 작업 기록')
         return _public(document)
     except DuplicateKeyError as exc:
         raise HTTPException(409, '이미 등록되었거나 승인 대기 중인 카드명입니다.') from exc
@@ -169,14 +178,14 @@ def submissions_for_review():
     try:
         rows = _collection().find({}).sort('created_at', -1)
         log_crud('READ', 'card_submissions', '관리자 승인 목록 조회')
-        return [_public(row) for row in rows]
+        return [_public(row) for row in rows if row['status'] != 'draft']
     except PyMongoError as exc:
         raise HTTPException(503, '카드 승인 목록을 불러오지 못했습니다.') from exc
 
 
 def review_submission(submission_id, reviewer_id, decision, reason=''):
-    if decision not in {'approved', 'rejected'}:
-        raise HTTPException(422, '승인 또는 반려만 선택할 수 있습니다.')
+    if decision not in {'approved', 'rejected', 'inactive'}:
+        raise HTTPException(422, '승인, 반려 또는 비활성만 선택할 수 있습니다.')
     reason = reason.strip()
     if decision == 'rejected' and not reason:
         raise HTTPException(422, '반려 사유를 입력해 주세요.')
@@ -185,12 +194,17 @@ def review_submission(submission_id, reviewer_id, decision, reason=''):
         document = collection.find_one({'_id': submission_id})
         if not document:
             raise HTTPException(404, '카드 등록 요청을 찾을 수 없습니다.')
-        if document['status'] != 'pending':
-            raise HTTPException(409, '이미 처리된 카드 요청입니다.')
+        allowed = {
+            'pending': {'approved', 'rejected'},
+            'approved': {'inactive'},
+            'inactive': {'approved'},
+        }
+        if decision not in allowed.get(document['status'], set()):
+            raise HTTPException(409, '현재 상태에서 요청한 상태로 변경할 수 없습니다.')
         reviewed_at = datetime.now(timezone.utc)
         changes = {'status': decision, 'review_reason': reason or None,
                    'reviewer_id': reviewer_id, 'reviewed_at': reviewed_at}
-        collection.update_one({'_id': submission_id, 'status': 'pending'}, {'$set': changes})
+        collection.update_one({'_id': submission_id, 'status': document['status']}, {'$set': changes})
         _audit_collection().insert_one({
             '_id': str(uuid4()), 'card_submission_id': submission_id,
             'actor_id': reviewer_id, 'action': decision,
@@ -203,6 +217,32 @@ def review_submission(submission_id, reviewer_id, decision, reason=''):
         raise
     except PyMongoError as exc:
         raise HTTPException(503, '카드 승인 결과를 저장하지 못했습니다.') from exc
+
+
+def submit_draft(submission_id, owner_id):
+    try:
+        collection = _collection()
+        document = collection.find_one({'_id': submission_id, 'owner_id': owner_id})
+        if not document:
+            raise HTTPException(404, '임시 저장한 카드를 찾을 수 없습니다.')
+        if document['status'] != 'draft':
+            raise HTTPException(409, '작성 중인 카드만 승인을 요청할 수 있습니다.')
+        submitted_at = datetime.now(timezone.utc)
+        changes = {'status': 'pending', 'submitted_at': submitted_at}
+        collection.update_one({'_id': submission_id, 'owner_id': owner_id, 'status': 'draft'},
+                              {'$set': changes})
+        _audit_collection().insert_one({
+            '_id': str(uuid4()), 'card_submission_id': submission_id,
+            'actor_id': owner_id, 'action': 'pending',
+            'reason': None, 'created_at': submitted_at,
+        })
+        log_crud('UPDATE', 'card_submissions', '임시 저장 카드 승인 요청')
+        log_crud('CREATE', 'card_audit_logs', '카드 제출 작업 기록')
+        return _public(document | changes)
+    except HTTPException:
+        raise
+    except PyMongoError as exc:
+        raise HTTPException(503, '카드 승인 요청을 저장하지 못했습니다.') from exc
 
 
 def approved_cards_for(owner_id):

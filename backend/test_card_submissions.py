@@ -8,7 +8,7 @@ from PIL import Image
 
 from app.services.card_submissions import (
     approved_cards_for, create_submission, image_for, review_submission,
-    submissions_for,
+    submissions_for, submissions_for_review, submit_draft,
 )
 
 
@@ -89,7 +89,7 @@ class CardSubmissionTests(unittest.TestCase):
         image, content_type = image_for(saved['id'], {'id': 'demo', 'role': 'user'})
         self.assertTrue(image.startswith(b'RIFF'))
         self.assertEqual(content_type, 'image/webp')
-        self.assertEqual(len(self.audit_collection.documents), 1)
+        self.assertEqual(len(self.audit_collection.documents), 2)
 
     def test_rejection_requires_reason_and_prevents_second_review(self):
         saved = create_submission('demo', '연필', '뜻', '학습', 'shared',
@@ -100,6 +100,22 @@ class CardSubmissionTests(unittest.TestCase):
         with self.assertRaises(HTTPException) as caught:
             review_submission(saved['id'], 'admin', 'approved', '')
         self.assertEqual(caught.exception.status_code, 409)
+
+    def test_draft_submit_and_inactive_state_flow(self):
+        draft = create_submission('demo', '연필', '글을 쓰는 도구', '학습', 'private',
+                                  'pencil.png', 'image/png', self.image, 'draft')
+        self.assertEqual(draft['status'], 'draft')
+        self.assertEqual(submissions_for_review(), [])
+        pending = submit_draft(draft['id'], 'demo')
+        self.assertEqual(pending['status'], 'pending')
+        approved = review_submission(draft['id'], 'admin', 'approved')
+        self.assertEqual(approved['status'], 'approved')
+        inactive = review_submission(draft['id'], 'admin', 'inactive', '운영자 비활성')
+        self.assertEqual(inactive['status'], 'inactive')
+        self.assertEqual(approved_cards_for('demo'), [])
+        restored = review_submission(draft['id'], 'admin', 'approved', '재활성')
+        self.assertEqual(restored['status'], 'approved')
+        self.assertEqual(len(self.audit_collection.documents), 5)
 
     def test_image_content_and_resolution_are_verified(self):
         with self.assertRaises(HTTPException) as mismatch:

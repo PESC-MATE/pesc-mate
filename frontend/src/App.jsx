@@ -190,14 +190,24 @@ function App() {
   async function submitCard(event) {
     event.preventDefault();
     const form = event.currentTarget;
+    const formData = new FormData(form);
+    formData.set('submission_mode', event.nativeEvent.submitter?.value || 'submit');
     setCardFormBusy(true); setCardFormError(''); setError('');
     try {
-      const saved = await request('/cards/submissions', { method: 'POST', body: new FormData(form) });
+      const saved = await request('/cards/submissions', { method: 'POST', body: formData });
       setCardSubmissions(current => [saved, ...current]);
       setShowCardForm(false);
       form.reset();
     } catch (e) { setCardFormError(e.message); }
     finally { setCardFormBusy(false); }
+  }
+  async function submitDraft(item) {
+    setReviewBusy(item.id); setError('');
+    try {
+      const saved = await request(`/cards/submissions/${item.id}/submit`, { method: 'POST' });
+      setCardSubmissions(current => current.map(row => row.id === item.id ? saved : row));
+    } catch (e) { setError(e.message); }
+    finally { setReviewBusy(''); }
   }
   async function hydrateImages(items) {
     return Promise.all(items.map(async item => {
@@ -330,7 +340,7 @@ function App() {
           {selectedCard ? <>{cardArt(selectedCard, 'detail-art')}<span className="detail-category">{selectedCard.category}</span><h3>{selectedCard.label}</h3><p>{selectedCard.label}을(를) 표현하는 PECS 카드예요.</p><button className="primary" onClick={() => { add(selectedCard); setTab('cards'); }}>문장에 사용하기</button></> : <div className="detail-empty"><span aria-hidden="true">👆</span><strong>카드를 선택해 주세요</strong><p>선택한 카드의 그림과 뜻이 여기에 보여요.</p></div>}
         </aside>
       </div>
-      <div className="submission-list"><h3>나의 등록 요청</h3>{cardSubmissions.length ? <ul>{cardSubmissions.map(item => <li key={item.id}><span><strong>{item.label}</strong><small>{item.category} · {item.visibility === 'private' ? '나만 사용' : '공개 요청'}</small></span><b className={`submission-status ${item.status}`}>{item.status === 'pending' ? '승인 대기' : item.status}</b></li>)}</ul> : <p className="muted">아직 등록한 카드가 없어요.</p>}</div>
+      <div className="submission-list"><h3>나의 등록 요청</h3>{cardSubmissions.length ? <ul>{cardSubmissions.map(item => <li key={item.id}><span><strong>{item.label}</strong><small>{item.category} · {item.visibility === 'private' ? '나만 사용' : '공개 요청'}</small></span><div className="submission-actions"><b className={`submission-status ${item.status}`}>{({ draft: '작성 중', pending: '승인 대기', approved: '승인', rejected: '반려', inactive: '비활성' })[item.status] || item.status}</b>{item.status === 'draft' && <button className="primary" disabled={reviewBusy === item.id} onClick={() => submitDraft(item)}>승인 요청</button>}</div></li>)}</ul> : <p className="muted">아직 등록한 카드가 없어요.</p>}</div>
       {loaded && !visibleCards.length && <p className="empty">조건에 맞는 카드가 없어요. 다른 검색어나 카테고리를 선택해 보세요.</p>}
       {showCardForm && <div className="modal-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setShowCardForm(false); }}>
         <section className="card-form-modal" role="dialog" aria-modal="true" aria-labelledby="card-form-title">
@@ -343,7 +353,7 @@ function App() {
             <label>공개 범위<select name="visibility" defaultValue="private"><option value="private">승인 후 나만 사용</option><option value="shared">승인 후 모든 사용자에게 공개 요청</option></select></label>
             <label>카드 이미지<input name="image" required type="file" accept="image/jpeg,image/png,image/webp" capture="environment" /></label>
             <p className="form-notice">제출한 카드는 관리자 승인 전까지 그림으로 말하기에 표시되지 않아요. JPG, PNG, WebP 파일을 5MB 이하, 가로·세로 128~4096px로 올려 주세요.</p>
-            <div className="modal-actions"><button type="button" disabled={cardFormBusy} onClick={() => setShowCardForm(false)}>취소</button><button type="submit" className="primary" disabled={cardFormBusy}>{cardFormBusy ? '제출 중…' : '승인 요청'}</button></div>
+            <div className="modal-actions"><button type="button" disabled={cardFormBusy} onClick={() => setShowCardForm(false)}>취소</button><button type="submit" value="draft" disabled={cardFormBusy}>임시 저장</button><button type="submit" value="submit" className="primary" disabled={cardFormBusy}>{cardFormBusy ? '저장 중…' : '승인 요청'}</button></div>
           </form>
         </section>
       </div>}
@@ -352,8 +362,8 @@ function App() {
       <div className="review-summary"><strong>{adminSubmissions.filter(item => item.status === 'pending').length}</strong><span>승인 대기</span><strong>{adminSubmissions.filter(item => item.status === 'approved').length}</strong><span>승인 완료</span><strong>{adminSubmissions.filter(item => item.status === 'rejected').length}</strong><span>반려</span></div>
       <div className="review-grid">{adminSubmissions.map(item => <article className="review-card" key={item.id}>
         {cardArt(item, 'review-image')}
-        <div className="review-content"><div className="review-title"><span><small>{item.category} · {item.visibility === 'private' ? '개인 카드' : '공개 카드'}</small><h3>{item.label}</h3></span><b className={`submission-status ${item.status}`}>{item.status === 'pending' ? '승인 대기' : item.status === 'approved' ? '승인' : '반려'}</b></div><p>{item.meaning}</p><small>제출자 {item.owner_id} · {new Date(item.created_at).toLocaleString('ko-KR')}</small>
-          {item.status === 'pending' ? <><textarea aria-label={`${item.label} 검토 사유`} maxLength="500" placeholder="반려 시 사유를 입력해 주세요." value={reviewDrafts[item.id] || ''} onChange={event => setReviewDrafts(current => ({ ...current, [item.id]: event.target.value }))} /><div className="review-actions"><button className="primary" disabled={reviewBusy === item.id} onClick={() => reviewCard(item, 'approved')}>승인</button><button className="danger" disabled={reviewBusy === item.id} onClick={() => reviewCard(item, 'rejected')}>반려</button></div></> : item.review_reason && <p className="review-reason">처리 사유: {item.review_reason}</p>}
+        <div className="review-content"><div className="review-title"><span><small>{item.category} · {item.visibility === 'private' ? '개인 카드' : '공개 카드'}</small><h3>{item.label}</h3></span><b className={`submission-status ${item.status}`}>{({ pending: '승인 대기', approved: '승인', rejected: '반려', inactive: '비활성' })[item.status] || item.status}</b></div><p>{item.meaning}</p><small>제출자 {item.owner_id} · {new Date(item.created_at).toLocaleString('ko-KR')}</small>
+          {item.status === 'pending' ? <><textarea aria-label={`${item.label} 검토 사유`} maxLength="500" placeholder="반려 시 사유를 입력해 주세요." value={reviewDrafts[item.id] || ''} onChange={event => setReviewDrafts(current => ({ ...current, [item.id]: event.target.value }))} /><div className="review-actions"><button className="primary" disabled={reviewBusy === item.id} onClick={() => reviewCard(item, 'approved')}>승인</button><button className="danger" disabled={reviewBusy === item.id} onClick={() => reviewCard(item, 'rejected')}>반려</button></div></> : <>{item.review_reason && <p className="review-reason">처리 사유: {item.review_reason}</p>}{item.status === 'approved' && <div className="review-actions"><button className="danger" disabled={reviewBusy === item.id} onClick={() => reviewCard(item, 'inactive')}>비활성</button></div>}{item.status === 'inactive' && <div className="review-actions"><button className="primary" disabled={reviewBusy === item.id} onClick={() => reviewCard(item, 'approved')}>재활성</button></div>}</>}
         </div>
       </article>)}</div>
       {!adminSubmissions.length && <p className="empty">아직 제출된 카드가 없습니다.</p>}

@@ -23,8 +23,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 header, .section-title { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 header { margin-bottom: 14px; }
 .brand, .account, .panel-heading { display: flex; align-items: center; gap: 12px; }
-.brand-mark, .profile-avatar, .login-mascot { display: grid; place-items: center; background: #31b9d6; border: 5px solid #fff; box-shadow: 0 5px 0 #d5a433; }
-.brand-mark, .profile-avatar { width: 58px; height: 58px; border-radius: 50%; font-size: 1.7rem; }
+.profile-avatar, .login-mascot { display: grid; place-items: center; background: #31b9d6; border: 5px solid #fff; box-shadow: 0 5px 0 #d5a433; }
+.profile-avatar { width: 58px; height: 58px; border-radius: 50%; font-size: 1.7rem; }
 .profile-avatar { background: #ff9363; }
 .eyebrow { margin: 0 0 2px; color: #e87716; font-weight: 800; letter-spacing: .03em; }
 h1, h2, h3 { font-family: "Arial Rounded MT Bold", "Malgun Gothic", sans-serif; font-weight: 700; }
@@ -161,7 +161,6 @@ body::after { width: 360px; height: 360px; right: auto; left: -170px; bottom: -1
 .app { width: min(1420px, calc(100% - 56px)); margin: 34px auto; padding: 22px 28px 28px; background: linear-gradient(160deg, #eaf9ff 0%, #edf6ff 60%, #e6f8e2 100%); border: 7px solid #fff; border-radius: 42px; box-shadow: 0 24px 55px #7396ae2e; overflow: hidden; }
 .app::before { content: ""; position: absolute; width: 180px; height: 54px; left: 90px; top: -18px; background: #fff; border-radius: 0 0 35px 35px; opacity: .8; }
 .app::after { content: "●  ◆  ●"; right: 42px; top: 115px; color: #fff; opacity: .8; }
-.brand-mark { background: #a8dc34; box-shadow: 0 4px 0 #83bb28; }
 .profile-avatar { background: #fff; box-shadow: 0 4px 0 #cce1e9; }
 .eyebrow { color: #6ca99d; }
 h1, h2, h3 { color: #52616f; }
@@ -262,7 +261,7 @@ body::before, body::after { display: none; }
   box-shadow: none;
 }
 .sidebar-brand { display: flex; align-items: center; gap: 12px; color: #262b35; letter-spacing: .05em; line-height: 1.05; }
-.sidebar-brand .brand-mark { width: 46px; height: 46px; border: 0; background: #f32c7d; box-shadow: none; font-size: 1.35rem; }
+.sidebar-brand .mascot-brand { width: 46px; height: 46px; object-fit: contain; }
 .profile { display: flex; align-items: center; gap: 12px; padding: 30px 2px 24px; }
 .profile .profile-avatar { flex: 0 0 48px; width: 48px; height: 48px; border: 2px solid #ffe2d7; background: #fff0e9; box-shadow: none; font-size: 1.45rem; }
 .profile strong, .profile small { display: block; }

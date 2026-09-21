@@ -436,7 +436,7 @@ function App() {
     onCancel={user.profile ? () => setShowProfile(false) : handleLogout} /></main>;
   return <main className="app">
     <aside className="sidebar">
-      <div className="sidebar-brand"><span className="brand-mark" aria-hidden="true">💬</span><strong>PESC<br />MATE</strong></div>
+      <div className="sidebar-brand"><Mascot className="mascot-brand" /><strong>PESC<br />MATE</strong></div>
       <div className="profile"><Avatar user={user} /><div><strong>{user.name}</strong><small>{user.role === 'admin' ? '컨텐츠 관리자' : user.role === 'caregiver' ? '보호자 계정' : 'PECS 사용자'}</small></div></div>
       <nav aria-label="주 메뉴">{user.role === 'admin' ? <button className="active" onClick={() => setTab('admin')}><span aria-hidden="true">☑</span>카드 승인<i aria-label={`승인 대기 ${adminSubmissions.filter(item => item.status === 'pending').length}개`}>{adminSubmissions.filter(item => item.status === 'pending').length}</i></button> : <>{user.role !== 'caregiver' && <><button className={tab === 'home' ? 'active' : ''} onClick={() => setTab('home')}><span aria-hidden="true">⌂</span>홈</button><button className={tab === 'cards' ? 'active' : ''} onClick={() => setTab('cards')}><span aria-hidden="true">▦</span>그림으로 말하기<i aria-label={`추천 카드 ${recommended.length}개`}>{recommended.length}</i></button><button className={tab === 'catalog' ? 'active' : ''} onClick={() => setTab('catalog')}><span aria-hidden="true">▤</span>카드</button></>}<button className={tab === 'dashboard' ? 'active' : ''} onClick={() => setTab('dashboard')}><span aria-hidden="true">▥</span>{user.role === 'caregiver' ? '보호자 현황' : '나의 이용 기록'}</button></>}</nav>
       <button type="button" onClick={() => { stopSpeech(); setShowProfile(true); setProfileNotice(''); }}>프로필 설정</button>

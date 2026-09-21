@@ -201,6 +201,28 @@ GET /api/health
 }
 ```
 
+## 5.3 문장 생성 모델 상태
+
+```http
+GET /api/model/status
+Authorization: Bearer {access_token}
+```
+
+```json
+{
+  "enabled": true,
+  "model": "qwen2.5:0.5b",
+  "policy_versions": {
+    "persona": "aac-ko-v1",
+    "output_rules": "sentence-output-v1",
+    "rule_engine": "ko-particle-v1",
+    "safety": "sentence-safety-v1"
+  }
+}
+```
+
+현재 Ollama 사용 여부와 모델 이름, 문장 생성에 적용되는 정책 버전을 반환한다.
+
 # 6. 인증 API
 
 ## 6.1 로그인

@@ -10,6 +10,7 @@ from fastapi import HTTPException
 from PIL import Image, ImageOps, UnidentifiedImageError
 from pymongo.errors import DuplicateKeyError, PyMongoError
 
+from app.services.card_metadata import with_inferred_metadata
 from app.services.database import database, log_crud
 from app.services.image_safety import check_image_safety
 from app.services.language_review import review_language
@@ -304,11 +305,11 @@ def approved_cards_for(owner_id):
     try:
         rows = _collection().find({'status': 'approved'}).sort('created_at', 1)
         visible = [row for row in rows if row['visibility'] == 'shared' or row['owner_id'] == owner_id]
-        return [{
+        return [with_inferred_metadata({
             'id': f"custom:{row['_id']}", 'label': row['label'], 'meaning': row['meaning'],
             'symbol': '🖼️', 'category': row['category'], 'image_index': None,
             'image_url': f"/api/cards/submissions/{row['_id']}/image", 'custom': True,
-        } for row in visible]
+        }) for row in visible]
     except PyMongoError as exc:
         raise HTTPException(503, '사용자 카드를 불러오지 못했습니다.') from exc
 

@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 from pymongo.errors import DuplicateKeyError
 from app.api.router import SentenceRequest
-from app.services.communication import ensure_demo_history, save_session, statistics
+from app.services.communication import CARDS, ensure_demo_history, save_session, statistics
 
 
 class Cursor(list):
@@ -48,6 +48,15 @@ class CommunicationTests(unittest.TestCase):
         self.mock = patch('app.services.communication._collection', return_value=self.collection)
         self.mock.start()
     def tearDown(self): self.mock.stop()
+
+    def test_default_cards_have_sentence_metadata(self):
+        required = {'meaning', 'part_of_speech', 'has_batchim', 'sentence_role'}
+        self.assertTrue(all(required <= card.keys() for card in CARDS))
+        cards = {card['id']: card for card in CARDS}
+        self.assertTrue(cards['water']['has_batchim'])
+        self.assertFalse(cards['apple']['has_batchim'])
+        self.assertEqual(cards['me']['sentence_role'], 'subject')
+        self.assertEqual(cards['go']['part_of_speech'], 'verb')
 
     def test_sentence_persistence_and_retry(self):
         request = SentenceRequest(cards=['me', 'water', 'drink'], request_id=uuid4())
@@ -121,6 +130,10 @@ class CommunicationTests(unittest.TestCase):
         stats = statistics('demo')
         self.assertEqual(stats['top_cards'][0]['label'], '연필')
         self.assertEqual(stats['categories']['학습'], 1)
+        metadata = next(iter(self.collection.documents.values()))['card_metadata']['custom:pencil']
+        self.assertEqual(metadata['part_of_speech'], 'noun')
+        self.assertTrue(metadata['has_batchim'])
+        self.assertEqual(metadata['sentence_role'], 'object')
 
 
 if __name__ == '__main__': unittest.main()

@@ -123,6 +123,10 @@ Authorization: Bearer {access_token}
 | `symbol` | string | 예 | 카드 그림 기호 |
 | `category` | string | 예 | `사람`, `음식`, `행동`, `장소`, `감정` 중 하나 |
 | `image_index` | integer | 예 | 카드 이미지 스프라이트 위치 인덱스(0~17) |
+| `meaning` | string | 예 | 문장 생성에 사용하는 카드의 정규화된 의미 |
+| `part_of_speech` | string | 예 | `noun`, `pronoun`, `verb`, `adjective`, `interjection` 등 품사 |
+| `has_batchim` | boolean | 예 | 카드명의 마지막 한글 음절 받침 여부 |
+| `sentence_role` | string | 예 | `subject`, `object`, `destination`, `predicate`, `response` 등 문장 역할 |
 | `count` | integer | 아니요 | 추천·통계 응답의 사용자 사용 횟수 |
 | `reason` | string | 아니요 | 추천 응답에 표시할 추천 근거 |
 
@@ -133,6 +137,10 @@ Authorization: Bearer {access_token}
   "symbol": "💧",
   "category": "음식",
   "image_index": 2,
+  "meaning": "마시는 물",
+  "part_of_speech": "noun",
+  "has_batchim": true,
+  "sentence_role": "object",
   "count": 3
 }
 ```

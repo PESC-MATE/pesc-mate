@@ -4,19 +4,32 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
 from pymongo.errors import DuplicateKeyError, PyMongoError
+from app.services.card_metadata import with_inferred_metadata
 from app.services.database import database, log_crud
 from app.services.model import generate_sentence
 
-CARDS = [dict(id=k, label=l, symbol=s, category=c, image_index=index) for index, (k, l, s, c) in enumerate([
-    ('me', '나', '🙋', '사람'), ('mom', '엄마', '👩', '사람'),
-    ('water', '물', '💧', '음식'), ('rice', '밥', '🍚', '음식'),
-    ('apple', '사과', '🍎', '음식'), ('milk', '우유', '🥛', '음식'),
-    ('drink', '마시다', '🥤', '행동'), ('eat', '먹다', '🍽️', '행동'),
-    ('go', '가다', '🚶', '행동'), ('rest', '쉬다', '🛋️', '행동'),
-    ('play', '놀다', '🧸', '행동'), ('help', '도와주세요', '🤝', '행동'),
-    ('toilet', '화장실', '🚻', '장소'), ('home', '집', '🏠', '장소'),
-    ('happy', '좋아요', '😊', '감정'), ('hurt', '아파요', '🤕', '감정'),
-    ('no', '싫어요', '🙅', '감정'), ('yes', '네', '👍', '감정'),
+CARDS = [with_inferred_metadata(dict(id=key, label=label, symbol=symbol, category=category,
+                                      meaning=meaning, part_of_speech=part_of_speech,
+                                      sentence_role=sentence_role, image_index=index))
+         for index, (key, label, symbol, category, meaning, part_of_speech, sentence_role) in enumerate([
+    ('me', '나', '🙋', '사람', '말하는 사용자 자신', 'pronoun', 'subject'),
+    ('mom', '엄마', '👩', '사람', '사용자의 어머니', 'noun', 'subject'),
+    ('water', '물', '💧', '음식', '마시는 물', 'noun', 'object'),
+    ('rice', '밥', '🍚', '음식', '먹는 밥', 'noun', 'object'),
+    ('apple', '사과', '🍎', '음식', '과일 사과', 'noun', 'object'),
+    ('milk', '우유', '🥛', '음식', '마시는 우유', 'noun', 'object'),
+    ('drink', '마시다', '🥤', '행동', '음료를 마시는 행동', 'verb', 'predicate'),
+    ('eat', '먹다', '🍽️', '행동', '음식을 먹는 행동', 'verb', 'predicate'),
+    ('go', '가다', '🚶', '행동', '장소로 이동하는 행동', 'verb', 'predicate'),
+    ('rest', '쉬다', '🛋️', '행동', '휴식을 취하는 행동', 'verb', 'predicate'),
+    ('play', '놀다', '🧸', '행동', '놀이를 하는 행동', 'verb', 'predicate'),
+    ('help', '도와주세요', '🤝', '행동', '다른 사람에게 도움을 요청함', 'verb', 'predicate'),
+    ('toilet', '화장실', '🚻', '장소', '화장실 장소', 'noun', 'destination'),
+    ('home', '집', '🏠', '장소', '사용자가 생활하는 집', 'noun', 'destination'),
+    ('happy', '좋아요', '😊', '감정', '좋거나 만족스러운 감정', 'adjective', 'predicate'),
+    ('hurt', '아파요', '🤕', '감정', '몸이 아픈 상태', 'adjective', 'predicate'),
+    ('no', '싫어요', '🙅', '감정', '원하지 않거나 거절하는 표현', 'adjective', 'predicate'),
+    ('yes', '네', '👍', '감정', '동의하거나 긍정하는 표현', 'interjection', 'response'),
 ])]
 INDEX = {card['id']: card for card in CARDS}
 
@@ -55,7 +68,7 @@ def sentence(ids, card_index=None):
 
 def save_session(request, user_id, custom_cards=None):
     card_ids = list(request.cards)
-    custom_index = {card['id']: card for card in (custom_cards or [])}
+    custom_index = {card['id']: with_inferred_metadata(card) for card in (custom_cards or [])}
     card_index = INDEX | custom_index
     fallback = sentence(card_ids, card_index)
     result, generation_source = generate_sentence([card_index[key]['label'] for key in card_ids], fallback)
@@ -68,7 +81,8 @@ def save_session(request, user_id, custom_cards=None):
             if existing['cards'] != card_ids:
                 raise HTTPException(409, '같은 요청 번호에 다른 카드가 전달되었습니다.')
             return _public(existing)
-        snapshots = {key: {field: card_index[key].get(field) for field in ('id', 'label', 'symbol', 'category')}
+        snapshots = {key: {field: card_index[key].get(field) for field in (
+            'id', 'label', 'symbol', 'category', 'meaning', 'part_of_speech', 'has_batchim', 'sentence_role')}
                      for key in card_ids if key in custom_index}
         document = {'_id': request_id, 'user_id': user_id, 'cards': card_ids, 'card_metadata': snapshots,
                     'sentence': result,

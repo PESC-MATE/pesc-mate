@@ -108,6 +108,9 @@ class CardResponse(BaseModel):
     category: str
     image_index: int | None = None
     meaning: str | None = None
+    part_of_speech: str | None = None
+    has_batchim: bool | None = None
+    sentence_role: str | None = None
     image_url: str | None = None
     custom: bool | None = None
     count: int | None = None

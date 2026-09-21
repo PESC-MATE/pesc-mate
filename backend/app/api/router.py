@@ -57,11 +57,22 @@ class CaregiverNoteResponse(BaseModel):
     updated_at: datetime
 
 
+class ProfileResponse(BaseModel):
+    kind: Literal['preset', 'custom']
+    preset: str | None = None
+    image_url: str | None = None
+
+
+class ProfileRequest(BaseModel):
+    preset: str = Field(min_length=1, max_length=20)
+
+
 class UserResponse(BaseModel):
     id: str
     username: str
     name: str
     role: str
+    profile: ProfileResponse | None = None
 
 
 class TtsSettingsRequest(BaseModel):
@@ -362,3 +373,29 @@ def dashboard(days: int | None = Query(default=None, ge=1, le=365),
         for row in result['recent']:
             row['caregiver_note'] = notes.get(row['id'])
     return result
+
+
+@api_router.get('/profile/presets', tags=['프로필'])
+def profile_presets(user=Depends(current_user)):
+    from app.services.profiles import PRESETS
+    return PRESETS
+
+
+@api_router.put('/profile', response_model=ProfileResponse, tags=['프로필'])
+def put_profile(request: ProfileRequest, user=Depends(current_user)):
+    from app.services.profiles import save_profile
+    return save_profile(user['id'], preset=request.preset)
+
+
+@api_router.post('/profile/image', response_model=ProfileResponse, tags=['프로필'])
+async def upload_profile(image: UploadFile = File(), user=Depends(current_user)):
+    from app.services.profiles import save_profile
+    content = await image.read(MAX_IMAGE_BYTES + 1)
+    return save_profile(user['id'], image_data=content, content_type=image.content_type)
+
+
+@api_router.get('/profile/{user_id}/image', tags=['프로필'])
+def get_profile_image(user_id: str, user=Depends(current_user)):
+    from app.services.profiles import profile_image
+    content, mime = profile_image(user_id, user)
+    return Response(content=content, media_type=mime, headers={'Cache-Control': 'private, no-store'})

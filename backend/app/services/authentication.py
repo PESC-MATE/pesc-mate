@@ -21,7 +21,8 @@ def _password_hash(password, salt=None):
 
 
 def _public_user(user):
-    return {'id': str(user['_id']), 'username': user['username'], 'name': user['name'], 'role': user['role']}
+    from app.services.profiles import public_profile
+    return {'id': str(user['_id']), 'username': user['username'], 'name': user['name'], 'role': user['role'], 'profile': public_profile(user)}
 
 
 def _ensure_user(username, password, name, role):

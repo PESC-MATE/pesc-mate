@@ -11,6 +11,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from pymongo.errors import DuplicateKeyError, PyMongoError
 
 from app.services.database import database, log_crud
+from app.services.image_safety import check_image_safety
 from app.services.language_review import review_language
 
 ALLOWED_IMAGE_TYPES = {'image/jpeg', 'image/png', 'image/webp'}
@@ -48,6 +49,10 @@ def _public(document):
         'reviewer_id': document.get('reviewer_id'),
         'reviewed_at': document.get('reviewed_at'),
         'language_flags': document.get('language_flags', []),
+        'image_safety': document.get('image_safety', {
+            'status': 'manual_review', 'provider': 'administrator',
+            'reasons': ['기존 이미지는 관리자 수동 검토가 필요합니다.'],
+        }),
         'created_at': document['created_at'],
     }
 
@@ -125,6 +130,9 @@ def create_submission(owner_id, label, meaning, category, visibility,
     if submission_mode not in {'draft', 'submit'}:
         raise HTTPException(422, '저장 방식이 올바르지 않습니다.')
     safe_image_data, safe_content_type = _normalize_image(image_data, image_content_type)
+    image_safety = check_image_safety(safe_image_data, safe_content_type)
+    if image_safety['status'] == 'blocked':
+        raise HTTPException(422, '안전성 검사를 통과하지 못한 이미지는 등록할 수 없습니다.')
 
     normalized_label = _compact_text(label)
     document = {
@@ -133,6 +141,7 @@ def create_submission(owner_id, label, meaning, category, visibility,
         'normalized_label': normalized_label,
         'meaning': meaning,
         'language_flags': review_language(label, meaning),
+        'image_safety': image_safety,
         'category': category,
         'visibility': visibility,
         'owner_id': owner_id,

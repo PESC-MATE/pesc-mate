@@ -447,6 +447,11 @@ footer { color: #9aa0aa; }
 .language-review b { color: #55470f; }
 .language-review span { color: #665d3c; font-size: .83rem; }
 .language-review small { grid-column: 2; color: #999070; }
+.image-safety { display: grid; grid-template-columns: 1fr auto; gap: 5px 10px; margin-top: 12px; padding: 12px 13px; border-radius: 10px; }
+.image-safety.passed { color: #246b45; background: #e5f7ec; }
+.image-safety.manual_review { color: #7c5d13; background: #fff5d8; }
+.image-safety > span { font-size: .78rem; }
+.image-safety > small { grid-column: 1 / -1; }
 .modal-backdrop { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 20px; background: #20273399; }
 .card-form-modal { width: min(100%, 560px); max-height: calc(100vh - 40px); overflow-y: auto; padding: 24px; background: #fff; border-radius: 18px; box-shadow: 0 24px 70px #11182759; }
 .modal-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }

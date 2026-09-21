@@ -396,6 +396,11 @@ Content-Type: multipart/form-data
 약어·은어·신조어 후보는 내부 검토 사전과 영문 약어 형식 검사를 거쳐
 `language_flags`에 표현, 유형, 뜻, 참고 출처를 반환한다. 이 결과는 자동 반려
 조건이 아니며 관리자 판단을 돕는 참고 정보다.
+이미지 안전성 검사 결과는 `image_safety`에 `passed`, `blocked`,
+`manual_review` 중 하나로 저장된다. `blocked`는 `422`로 등록을 거부하고,
+공급자 미설정·장애 시에는 `manual_review`로 저장해 관리자에게 표시한다.
+외부 공급자는 `IMAGE_SAFETY_API_URL`에 JSON POST로 호출되며
+`{"safe": true|false, "provider": "...", "reasons": []}` 응답을 사용한다.
 
 ## 7.3 본인 카드 등록 요청 조회
 

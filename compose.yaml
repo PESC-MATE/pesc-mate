@@ -35,6 +35,8 @@ services:
       OLLAMA_BASE_URL: http://host.docker.internal:11434
       OLLAMA_MODEL: qwen2.5:0.5b
       OLLAMA_TIMEOUT_SECONDS: "60"
+      IMAGE_SAFETY_API_URL: "${IMAGE_SAFETY_API_URL:-}"
+      IMAGE_SAFETY_API_TOKEN: "${IMAGE_SAFETY_API_TOKEN:-}"
     ports:
       - "127.0.0.1:8000:8000"
     volumes:

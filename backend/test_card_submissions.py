@@ -165,6 +165,17 @@ class CardSubmissionTests(unittest.TestCase):
         self.assertEqual(saved['language_flags'][0]['term'], 'TMI')
         self.assertTrue(saved['language_flags'][0]['source'])
 
+    @patch('app.services.card_submissions.check_image_safety')
+    def test_safety_blocked_image_cannot_be_submitted(self, safety_check):
+        safety_check.return_value = {
+            'status': 'blocked', 'provider': 'test-provider', 'reasons': ['unsafe'],
+        }
+        with self.assertRaises(HTTPException) as caught:
+            create_submission('demo', '연필', '글을 쓰는 도구', '학습', 'private',
+                              'card.png', 'image/png', self.image)
+        self.assertEqual(caught.exception.status_code, 422)
+        self.assertEqual(self.collection.documents, [])
+
 
 if __name__ == '__main__':
     unittest.main()

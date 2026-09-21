@@ -90,6 +90,9 @@ npm run build:watch
 
 개발용 관리자 계정은 `admin` / `admin1234`이며, 사용자가 제출한
 카드를 관리자 화면에서 승인하거나 반려할 수 있습니다.
+이미지 콘텐츠 안전성 검사 API를 사용하려면 `IMAGE_SAFETY_API_URL`과
+선택적으로 `IMAGE_SAFETY_API_TOKEN`을 설정합니다. 공급자가 없거나 장애가
+발생하면 관리자 수동 검토 상태로 자동 전환됩니다.
 
 ## 개발 문서
 

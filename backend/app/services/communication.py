@@ -8,7 +8,7 @@ from pymongo.errors import DuplicateKeyError, PyMongoError
 from app.services.card_metadata import with_inferred_metadata
 from app.services.database import database, log_crud
 from app.services.model import generate_sentence
-from app.services.sentence_validation import validate_semantics
+from app.services.sentence_validation import validate_safety, validate_semantics
 
 logger = logging.getLogger('uvicorn.error')
 
@@ -131,9 +131,15 @@ def save_session(request, user_id, custom_cards=None):
     fallback = sentence(card_ids, card_index)
     result, generation_source = generate_sentence([card_index[key]['label'] for key in card_ids], fallback)
     validation = validate_semantics([card_index[key] for key in card_ids], result)
-    if generation_source == 'ollama' and not validation['passed']:
-        logger.warning('MODEL | FALLBACK | 카드 의미 누락 (%s)', ','.join(validation['missing_card_ids']))
+    safety = validate_safety(result)
+    if generation_source == 'ollama' and (not validation['passed'] or not safety['passed']):
+        reasons = validation['missing_card_ids'] + safety['flags']
+        logger.warning('MODEL | FALLBACK | 문장 검증 실패 (%s)', ','.join(reasons))
         result, generation_source = fallback, 'rule'
+    fallback_safety = validate_safety(result)
+    if not fallback_safety['passed']:
+        logger.warning('MODEL | BLOCKED | 안전하지 않은 문장 차단 (%s)', ','.join(fallback_safety['flags']))
+        raise HTTPException(422, '안전한 문장을 만들지 못했습니다. 다른 카드를 선택해 주세요.')
     request_id = str(request.request_id)
     try:
         collection = _collection()

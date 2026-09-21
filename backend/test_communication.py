@@ -8,7 +8,7 @@ from pydantic import ValidationError
 from pymongo.errors import DuplicateKeyError
 from app.api.router import SentenceRequest
 from app.services.communication import CARDS, attach_particle, ensure_demo_history, save_session, sentence, statistics
-from app.services.sentence_validation import validate_semantics
+from app.services.sentence_validation import validate_safety, validate_semantics
 
 
 class Cursor(list):
@@ -114,6 +114,33 @@ class CommunicationTests(unittest.TestCase):
         )
         self.assertEqual(result['sentence'], '물이 싫어요.')
         self.assertEqual(result['generation_source'], 'rule')
+
+    def test_sentence_safety_flags_harmful_and_personal_content(self):
+        self.assertEqual(validate_safety('시 발이라고 욕했어요.')['flags'], ['prohibited_language'])
+        self.assertEqual(validate_safety('전화번호는 010-1234-5678이에요.')['flags'],
+                         ['personal_data', 'personal_inference'])
+        self.assertEqual(validate_safety('장애가 있어서 물을 마셔요.')['flags'], ['personal_inference'])
+        self.assertTrue(validate_safety('저는 물을 마시고 싶어요.')['passed'])
+
+    @patch('app.services.communication.generate_sentence')
+    def test_unsafe_generated_sentence_uses_safe_rule(self, mocked_generate):
+        mocked_generate.return_value = ('저는 물을 마시고 싶어요. 전화번호는 010-1234-5678이에요.', 'ollama')
+        result = save_session(
+            SentenceRequest(cards=['me', 'water', 'drink'], request_id=uuid4()), 'demo',
+        )
+        self.assertEqual(result['sentence'], '저는 물을 마시고 싶어요.')
+        self.assertEqual(result['generation_source'], 'rule')
+
+    @patch('app.services.communication.generate_sentence')
+    def test_unsafe_rule_sentence_is_not_exposed(self, mocked_generate):
+        custom = {'id': 'custom:unsafe', 'label': '전화번호는', 'symbol': '🖼️', 'category': '사용자'}
+        mocked_generate.return_value = ('전화번호는', 'rule')
+        with self.assertRaises(HTTPException) as caught:
+            save_session(
+                SentenceRequest(cards=['custom:unsafe'], request_id=uuid4()), 'demo', [custom],
+            )
+        self.assertEqual(caught.exception.status_code, 422)
+        self.assertEqual(statistics('demo')['sessions'], 0)
 
     def test_sentence_persistence_and_retry(self):
         request = SentenceRequest(cards=['me', 'water', 'drink'], request_id=uuid4())

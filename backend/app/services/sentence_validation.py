@@ -24,6 +24,18 @@ SEMANTIC_TOKENS = {
     'yes': ('네', '응', '동의', '좋아'),
 }
 
+PROHIBITED_TOKENS = ('시발', '씨발', '병신', '개새끼', '지랄')
+HARMFUL_TOKENS = ('자해', '살인', '죽어버려', '죽고싶', '때려죽', '해치고싶')
+PERSONAL_INFERENCE_TOKENS = (
+    '전화번호는', '주소는', '사는곳은', '학교이름은', '주민등록번호',
+    '자폐라서', '장애가있어서', '진단받아서', '병이있어서',
+)
+PERSONAL_DATA_PATTERNS = (
+    re.compile(r'(?<!\d)01[016789][- ]?\d{3,4}[- ]?\d{4}(?!\d)'),
+    re.compile(r'(?<!\d)\d{6}[- ]?[1-4]\d{6}(?!\d)'),
+    re.compile(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'),
+)
+
 
 def _normalize(value):
     normalized = unicodedata.normalize('NFKC', value).lower()
@@ -51,3 +63,17 @@ def validate_semantics(cards, generated_sentence):
         if not any(token and token in normalized_sentence for token in tokens):
             missing.append(card['id'])
     return {'passed': not missing, 'missing_card_ids': missing}
+
+
+def validate_safety(generated_sentence):
+    normalized = _normalize(generated_sentence)
+    flags = []
+    if any(token in normalized for token in PROHIBITED_TOKENS):
+        flags.append('prohibited_language')
+    if any(token in normalized for token in HARMFUL_TOKENS):
+        flags.append('harmful_expression')
+    if any(pattern.search(generated_sentence) for pattern in PERSONAL_DATA_PATTERNS):
+        flags.append('personal_data')
+    if any(token in normalized for token in PERSONAL_INFERENCE_TOKENS):
+        flags.append('personal_inference')
+    return {'passed': not flags, 'flags': flags}

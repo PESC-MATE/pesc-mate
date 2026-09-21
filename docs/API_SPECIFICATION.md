@@ -740,3 +740,8 @@ DB CRUD | CREATE | communication_sessions | 문장 기록 저장
 5. Ollama가 실행되지 않거나 모델 응답이 60초를 초과하면 규칙 기반 문장을 사용한다.
 6. 음성 출력은 프런트엔드의 Web Speech API로 처리하므로 백엔드 TTS API는 없다.
 7. `/api/health`는 백엔드 상태만 반환하며 MongoDB 준비 상태를 응답에 포함하지 않는다.
+
+
+## 사용자 프로필 API
+
+프로필 조회·저장·사진 접근 권한과 응답 필드는 [사용자 프로필 정책](PROFILE_POLICY.md#api)을 참고한다. 인증 응답과 연결 사용자 응답의 `profile` 필드는 미설정 계정에서 `null`이다.

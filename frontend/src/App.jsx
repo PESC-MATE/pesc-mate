@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { hasToken, request, requestBlob, setToken } from "./services/api";
 import { clearBoard, loadBoard, saveBoard } from "./services/boardStorage";
@@ -47,7 +47,8 @@ function App() {
   const [stats, setStats] = useState(null);
   const [period, setPeriod] = useState('all');
   const [statsBusy, setStatsBusy] = useState(false);
-  const [speaking, setSpeaking] = useState(false);
+  const [speechState, setSpeechState] = useState({ status: 'idle', content: '' });
+  const speechRunRef = useRef(0);
   const [ttsVoices, setTtsVoices] = useState([]);
   const [ttsSettings, setTtsSettings] = useState({ preset: 'child', voiceName: '', rate: 0.9, pitch: 1.25 });
   const [ttsSettingsBusy, setTtsSettingsBusy] = useState(false);
@@ -133,14 +134,14 @@ function App() {
     setBusy(true);
     try { await request('/auth/logout', { method: 'POST' }); } catch { /* local logout still applies */ }
     clearBoard(user?.id);
-    window.speechSynthesis?.cancel(); setToken(null); setUser(null); setLoaded(false);
+    stopSpeech(); setToken(null); setUser(null); setLoaded(false);
     [...cards, ...recommended, ...adminSubmissions].forEach(item => { if (item.image_src) URL.revokeObjectURL(item.image_src); });
     setCards([]); setRecommended([]); setStats(null); setBoard([]); setCardSubmissions([]); setAdminSubmissions([]); setLinkedUsers([]); setSelectedUser(null); setText(''); setError(''); setTab('home');
     setTtsSettings({ preset: 'child', voiceName: '', rate: 0.9, pitch: 1.25 }); setTtsSettingsSaved(false); setBusy(false);
   }
 
   function updateBoard(next) {
-    window.speechSynthesis?.cancel(); setSpeaking(false);
+    stopSpeech();
     setBoard(next); saveBoard(user?.id, next); setText(''); setGenerationSource(''); setRequestId(crypto.randomUUID());
   }
   function add(card) {
@@ -167,16 +168,41 @@ function App() {
   }
   function speakText(content) {
     if (!window.speechSynthesis) { setError('이 브라우저는 음성 출력을 지원하지 않습니다.'); return; }
+    const runId = ++speechRunRef.current;
+    if (window.speechSynthesis.paused) window.speechSynthesis.resume();
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(content);
     utterance.lang = 'ko-KR'; utterance.rate = ttsSettings.rate; utterance.pitch = ttsSettings.pitch;
     const voice = ttsVoices.find(item => item.name === ttsSettings.voiceName) || ttsVoices[0];
     if (voice) utterance.voice = voice;
-    utterance.onend = () => setSpeaking(false);
-    utterance.onerror = (event) => { setSpeaking(false); if (!['canceled', 'interrupted'].includes(event.error)) setError('음성을 재생하지 못했습니다. 기기의 한국어 음성 설정을 확인해 주세요.'); };
-    setSpeaking(true); window.speechSynthesis.speak(utterance);
+    utterance.onstart = () => { if (speechRunRef.current === runId) setSpeechState({ status: 'playing', content }); };
+    utterance.onpause = () => { if (speechRunRef.current === runId) setSpeechState({ status: 'paused', content }); };
+    utterance.onresume = () => { if (speechRunRef.current === runId) setSpeechState({ status: 'playing', content }); };
+    utterance.onend = () => { if (speechRunRef.current === runId) setSpeechState({ status: 'idle', content: '' }); };
+    utterance.onerror = (event) => {
+      if (speechRunRef.current !== runId) return;
+      setSpeechState({ status: 'idle', content: '' });
+      if (!['canceled', 'interrupted'].includes(event.error)) setError('음성을 재생하지 못했습니다. 기기의 한국어 음성 설정을 확인해 주세요.');
+    };
+    setSpeechState({ status: 'starting', content }); window.speechSynthesis.speak(utterance);
   }
   function speak() { speakText(text); }
+  function pauseSpeech() {
+    if (speechState.status !== 'playing') return;
+    window.speechSynthesis.pause();
+    setSpeechState(current => ({ ...current, status: 'paused' }));
+  }
+  function resumeSpeech() {
+    if (speechState.status !== 'paused') return;
+    window.speechSynthesis.resume();
+    setSpeechState(current => ({ ...current, status: 'playing' }));
+  }
+  function stopSpeech() {
+    speechRunRef.current += 1;
+    window.speechSynthesis?.cancel();
+    if (window.speechSynthesis?.paused) window.speechSynthesis.resume();
+    setSpeechState({ status: 'idle', content: '' });
+  }
   function updateTtsSettings(changes) {
     setTtsSettings(current => ({ ...current, ...changes }));
     setTtsSettingsSaved(false);
@@ -312,6 +338,8 @@ function App() {
   const todayLabel = new Intl.DateTimeFormat('ko-KR', {
     month: '2-digit', day: '2-digit', weekday: 'long',
   }).format(new Date());
+  const speechActive = speechState.status !== 'idle';
+  const speechStatusLabel = ({ starting: '음성 준비 중', playing: '음성 재생 중', paused: '음성 일시 정지' })[speechState.status];
   const pageTitle = user?.role === 'admin'
     ? '카드 등록 요청을 검토해요.'
     : user?.role === 'caregiver'
@@ -348,7 +376,7 @@ function App() {
       <button className="logout" onClick={handleLogout} disabled={busy}>로그아웃</button>
     </aside>
     <div className="app-content">
-      <header className="topbar"><div><p className="eyebrow">오늘은 {todayLabel}</p><h1>{pageTitle}</h1></div><span className="status"><b className={loaded ? 'online' : ''}></b>{loaded ? '서비스 연결됨' : '연결 대기'}</span></header>
+      <header className="topbar"><div><p className="eyebrow">오늘은 {todayLabel}</p><h1>{pageTitle}</h1></div><div className="topbar-statuses"><span className="status"><b className={loaded ? 'online' : ''}></b>{loaded ? '서비스 연결됨' : '연결 대기'}</span>{speechActive && <div className={`speech-player ${speechState.status}`} role="status" aria-live="polite"><span><b aria-hidden="true">🔊</b><strong>{speechStatusLabel}</strong><small title={speechState.content}>{speechState.content}</small></span>{speechState.status === 'playing' && <button type="button" onClick={pauseSpeech}>일시 정지</button>}{speechState.status === 'paused' && <button type="button" onClick={resumeSpeech}>재개</button>}<button type="button" onClick={stopSpeech}>중지</button></div>}</div></header>
       {error && <div role="alert" className="error">{error} <button disabled={busy} onClick={() => load(user)}>다시 연결</button></div>}
       {!loaded && !error && <p role="status">카드를 불러오는 중입니다…</p>}
       {tab === 'home' && user.role !== 'caregiver' ? <section className="home-screen">
@@ -380,7 +408,7 @@ function App() {
         <ol>{board.map((c, i) => <li key={`${c.id}-${i}`}><span>{c.symbol} {c.label}</span><div><button aria-label={`${i + 1}번째 카드 앞으로`} disabled={i === 0 || busy} onClick={() => move(i, -1)}>←</button><button aria-label={`${i + 1}번째 카드 뒤로`} disabled={i === board.length - 1 || busy} onClick={() => move(i, 1)}>→</button><button aria-label={`${i + 1}번째 카드 삭제`} disabled={busy} onClick={() => updateBoard(board.filter((_, n) => n !== i))}>×</button></div></li>)}</ol>
         <button className="primary full" disabled={!board.length || busy} onClick={generate}>{busy ? '문장을 만드는 중…' : '문장 만들기 · 저장'}</button>
         <div className="sentence" aria-live="polite">{text || '만든 문장이 여기에 표시돼요.'}{text && <small className={`source-badge ${generationSource}`}>{generationSource === 'ollama' ? 'Qwen · Ollama 생성' : '규칙 기반 생성'}</small>}</div>
-        <div className="actions"><button className="primary" disabled={!text || busy || speaking} onClick={speak}>🔊 읽어주기</button><button disabled={!speaking} onClick={() => { window.speechSynthesis.cancel(); setSpeaking(false); }}>중지</button></div>
+        <div className="actions"><button className="primary" disabled={!text || busy || speechActive} onClick={speak}>🔊 읽어주기</button>{speechState.status === 'playing' && <button onClick={pauseSpeech}>일시 정지</button>}{speechState.status === 'paused' && <button onClick={resumeSpeech}>재개</button>}<button disabled={!speechActive} onClick={stopSpeech}>중지</button></div>
         <details className="tts-settings">
           <summary>⚙️ 음성 설정</summary>
           <div className="tts-settings-grid">

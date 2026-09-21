@@ -571,3 +571,14 @@ footer { color: #9aa0aa; }
 .profile-upload p { color: #526174; font-size: 14px; }
 .profile-preview { width: 100px; height: 100px; border-radius: 50%; object-fit: cover; }
 .profile-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+
+/* Shared mascot stays decorative; nearby text carries the meaning. */
+.mascot { display: block; width: 96px; height: 96px; object-fit: contain; flex-shrink: 0; }
+.login-mascot { width: 112px; height: 112px; background: transparent; border: 0; box-shadow: none; transform: none; }
+.login-mascot .mascot { width: 112px; height: 112px; }
+.mascot-help { width: 48px; height: 48px; }
+.mascot-heading { width: 72px; height: 72px; }
+.home-card-visual .mascot-launch { position: relative; z-index: 1; width: 150px; height: 150px; max-width: 65%; }
+.mascot-empty { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.mascot-empty p { margin: 0; }
+.detail-empty .mascot { margin: 0 auto 12px; }

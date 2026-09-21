@@ -143,10 +143,10 @@ function App() {
     } catch (e) { setError(e.message); }
     finally { setBusy(false); }
   }
-  function speak() {
+  function speakText(content) {
     if (!window.speechSynthesis) { setError('이 브라우저는 음성 출력을 지원하지 않습니다.'); return; }
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
+    const utterance = new SpeechSynthesisUtterance(content);
     utterance.lang = 'ko-KR'; utterance.rate = 0.85;
     const voice = window.speechSynthesis.getVoices().find(v => v.lang.startsWith('ko'));
     if (voice) utterance.voice = voice;
@@ -154,6 +154,7 @@ function App() {
     utterance.onerror = (event) => { setSpeaking(false); if (!['canceled', 'interrupted'].includes(event.error)) setError('음성을 재생하지 못했습니다. 기기의 한국어 음성 설정을 확인해 주세요.'); };
     setSpeaking(true); window.speechSynthesis.speak(utterance);
   }
+  function speak() { speakText(text); }
   async function changePeriod(value) {
     setPeriod(value); setStatsBusy(true); setError('');
     try { setStats(await request(dashboardPath(value))); }
@@ -246,13 +247,20 @@ function App() {
       {!hasImage && <><b aria-hidden="true">🖼️</b><small>{card.label}</small></>}
     </span>;
   }
+  function cardSpeaker(card) {
+    function play(event) {
+      event.preventDefault(); event.stopPropagation();
+      if (!busy) speakText(card.label);
+    }
+    return <span className="card-speaker" role="button" tabIndex="0" aria-label={`${card.label} 단어 듣기`} onClick={play} onKeyDown={event => { if (['Enter', ' '].includes(event.key)) play(event); }}>🔊</span>;
+  }
   function cardPicture(card, className = 'mini-card') {
     return <span key={card.id} className={className} title={card.label} aria-label={card.label} role="img" style={artStyle(card)} />;
   }
   function tile(card) {
     return <button className="card" key={card.id} disabled={busy} onClick={() => add(card)}>
       {cardArt(card)}
-      <strong>{card.label}</strong>{card.reason && <small>{card.reason}</small>}
+      <strong>{card.label}</strong>{card.reason && <small>{card.reason}</small>}{cardSpeaker(card)}
     </button>;
   }
   const visibleCards = cards.filter(card =>
@@ -342,10 +350,10 @@ function App() {
       <div className="catalog-layout">
         <div className="catalog-grid" aria-label="카드 목록">{visibleCards.map(card => <button className="catalog-card" key={card.id} aria-pressed={selectedCard?.id === card.id} onClick={() => setSelectedCard(card)}>
           {cardArt(card)}
-          <span><strong>{card.label}</strong><small>{card.category}</small></span>
+          <span><strong>{card.label}</strong><small>{card.category}</small></span>{cardSpeaker(card)}
         </button>)}</div>
         <aside className="card-detail" aria-live="polite">
-          {selectedCard ? <>{cardArt(selectedCard, 'detail-art')}<span className="detail-category">{selectedCard.category}</span><h3>{selectedCard.label}</h3><p>{selectedCard.label}을(를) 표현하는 PECS 카드예요.</p><button className="primary" onClick={() => { add(selectedCard); setTab('cards'); }}>문장에 사용하기</button></> : <div className="detail-empty"><span aria-hidden="true">👆</span><strong>카드를 선택해 주세요</strong><p>선택한 카드의 그림과 뜻이 여기에 보여요.</p></div>}
+          {selectedCard ? <>{cardArt(selectedCard, 'detail-art')}<span className="detail-category">{selectedCard.category}</span><h3>{selectedCard.label}</h3><p>{selectedCard.label}을(를) 표현하는 PECS 카드예요.</p><div className="detail-actions"><button aria-label={`${selectedCard.label} 단어 듣기`} onClick={() => speakText(selectedCard.label)}>🔊 단어 듣기</button><button className="primary" onClick={() => { add(selectedCard); setTab('cards'); }}>문장에 사용하기</button></div></> : <div className="detail-empty"><span aria-hidden="true">👆</span><strong>카드를 선택해 주세요</strong><p>선택한 카드의 그림과 뜻이 여기에 보여요.</p></div>}
         </aside>
       </div>
       <div className="submission-list"><h3>나의 등록 요청</h3>{cardSubmissions.length ? <ul>{cardSubmissions.map(item => <li key={item.id}><span><strong>{item.label}</strong><small>{item.category} · {item.visibility === 'private' ? '나만 사용' : '공개 요청'}</small></span><div className="submission-actions"><b className={`submission-status ${item.status}`}>{({ draft: '작성 중', pending: '승인 대기', approved: '승인', rejected: '반려', inactive: '비활성' })[item.status] || item.status}</b>{['draft', 'rejected'].includes(item.status) && <button disabled={reviewBusy === item.id} onClick={() => { setEditingSubmission(item); setCardFormError(''); setShowCardForm(true); }}>수정</button>}{item.status === 'draft' && <button className="primary" disabled={reviewBusy === item.id} onClick={() => submitDraft(item)}>승인 요청</button>}</div></li>)}</ul> : <p className="muted">아직 등록한 카드가 없어요.</p>}</div>

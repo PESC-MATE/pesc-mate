@@ -159,6 +159,12 @@ class CardSubmissionTests(unittest.TestCase):
                               'card.png', 'image/png', self.image)
         self.assertEqual(pending_duplicate.exception.status_code, 409)
 
+    def test_language_review_flags_are_saved_with_submission(self):
+        saved = create_submission('demo', 'TMI', '지나친 정보', '사용자 카드', 'private',
+                                  'card.png', 'image/png', self.image)
+        self.assertEqual(saved['language_flags'][0]['term'], 'TMI')
+        self.assertTrue(saved['language_flags'][0]['source'])
+
 
 if __name__ == '__main__':
     unittest.main()

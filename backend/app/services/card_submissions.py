@@ -11,6 +11,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from pymongo.errors import DuplicateKeyError, PyMongoError
 
 from app.services.database import database, log_crud
+from app.services.language_review import review_language
 
 ALLOWED_IMAGE_TYPES = {'image/jpeg', 'image/png', 'image/webp'}
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
@@ -46,6 +47,7 @@ def _public(document):
         'review_reason': document.get('review_reason'),
         'reviewer_id': document.get('reviewer_id'),
         'reviewed_at': document.get('reviewed_at'),
+        'language_flags': document.get('language_flags', []),
         'created_at': document['created_at'],
     }
 
@@ -130,6 +132,7 @@ def create_submission(owner_id, label, meaning, category, visibility,
         'label': label,
         'normalized_label': normalized_label,
         'meaning': meaning,
+        'language_flags': review_language(label, meaning),
         'category': category,
         'visibility': visibility,
         'owner_id': owner_id,
@@ -267,6 +270,7 @@ def update_submission(submission_id, owner_id, label, meaning, category, visibil
         updated_at = datetime.now(timezone.utc)
         changes = {
             'label': label, 'normalized_label': normalized_label, 'meaning': meaning,
+            'language_flags': review_language(label, meaning),
             'category': category, 'visibility': visibility, 'status': 'draft',
             'review_reason': None, 'reviewer_id': None, 'reviewed_at': None,
             'updated_at': updated_at,

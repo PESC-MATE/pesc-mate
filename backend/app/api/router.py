@@ -96,6 +96,7 @@ class CardSubmissionResponse(BaseModel):
     review_reason: str | None = None
     reviewer_id: str | None = None
     reviewed_at: datetime | None = None
+    language_flags: list[dict[str, str]] = Field(default_factory=list)
     created_at: datetime
 
 

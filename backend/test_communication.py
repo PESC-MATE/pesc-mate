@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from pymongo.errors import DuplicateKeyError
 from app.api.router import SentenceRequest
 from app.services.communication import CARDS, attach_particle, ensure_demo_history, save_session, sentence, statistics
+from app.services.sentence_validation import validate_semantics
 
 
 class Cursor(list):
@@ -74,6 +75,45 @@ class CommunicationTests(unittest.TestCase):
         self.assertEqual(sentence(['water', 'apple', 'eat']), '물과 사과를 먹고 싶어요.')
         self.assertEqual(sentence(['me', 'home', 'go']), '저는 집에 가고 싶어요.')
         self.assertEqual(sentence(['water', 'no']), '물이 싫어요.')
+
+    def test_semantic_validation_accepts_inflections_and_synonyms(self):
+        cards = {card['id']: card for card in CARDS}
+        result = validate_semantics(
+            [cards['me'], cards['water'], cards['drink']],
+            '저는 물을 마시고 싶어요.',
+        )
+        self.assertTrue(result['passed'])
+        negative = validate_semantics([cards['water'], cards['no']], '물을 원하지 않아요.')
+        self.assertTrue(negative['passed'])
+        missing_subject = validate_semantics([cards['me'], cards['water']], '물을 원하나요?')
+        self.assertEqual(missing_subject['missing_card_ids'], ['me'])
+
+    @patch('app.services.communication.generate_sentence')
+    def test_generated_sentence_missing_card_meaning_uses_rule(self, mocked_generate):
+        mocked_generate.return_value = ('저는 밥을 먹고 싶어요.', 'ollama')
+        result = save_session(
+            SentenceRequest(cards=['me', 'water', 'drink'], request_id=uuid4()), 'demo',
+        )
+        self.assertEqual(result['sentence'], '저는 물을 마시고 싶어요.')
+        self.assertEqual(result['generation_source'], 'rule')
+
+    @patch('app.services.communication.generate_sentence')
+    def test_generated_sentence_preserving_card_meaning_is_kept(self, mocked_generate):
+        mocked_generate.return_value = ('저는 물을 마시고 싶어요.', 'ollama')
+        result = save_session(
+            SentenceRequest(cards=['me', 'water', 'drink'], request_id=uuid4()), 'demo',
+        )
+        self.assertEqual(result['sentence'], '저는 물을 마시고 싶어요.')
+        self.assertEqual(result['generation_source'], 'ollama')
+
+    @patch('app.services.communication.generate_sentence')
+    def test_generated_sentence_cannot_drop_negation(self, mocked_generate):
+        mocked_generate.return_value = ('물을 원해요.', 'ollama')
+        result = save_session(
+            SentenceRequest(cards=['water', 'no'], request_id=uuid4()), 'demo',
+        )
+        self.assertEqual(result['sentence'], '물이 싫어요.')
+        self.assertEqual(result['generation_source'], 'rule')
 
     def test_sentence_persistence_and_retry(self):
         request = SentenceRequest(cards=['me', 'water', 'drink'], request_id=uuid4())

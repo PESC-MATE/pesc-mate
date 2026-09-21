@@ -1,12 +1,16 @@
 """Curated PECS cards, rule-based sentences, and MongoDB history."""
 from collections import Counter
 from datetime import datetime, timedelta, timezone
+import logging
 
 from fastapi import HTTPException
 from pymongo.errors import DuplicateKeyError, PyMongoError
 from app.services.card_metadata import with_inferred_metadata
 from app.services.database import database, log_crud
 from app.services.model import generate_sentence
+from app.services.sentence_validation import validate_semantics
+
+logger = logging.getLogger('uvicorn.error')
 
 CARDS = [with_inferred_metadata(dict(id=key, label=label, symbol=symbol, category=category,
                                       meaning=meaning, part_of_speech=part_of_speech,
@@ -126,6 +130,10 @@ def save_session(request, user_id, custom_cards=None):
     card_index = INDEX | custom_index
     fallback = sentence(card_ids, card_index)
     result, generation_source = generate_sentence([card_index[key]['label'] for key in card_ids], fallback)
+    validation = validate_semantics([card_index[key] for key in card_ids], result)
+    if generation_source == 'ollama' and not validation['passed']:
+        logger.warning('MODEL | FALLBACK | 카드 의미 누락 (%s)', ','.join(validation['missing_card_ids']))
+        result, generation_source = fallback, 'rule'
     request_id = str(request.request_id)
     try:
         collection = _collection()

@@ -8,6 +8,7 @@ from app.services.authentication import current_user, dashboard_user, linked_use
 from app.services.model import status as model_status
 from app.services.caregiver_notes import delete_note, notes_for, save_note
 from app.services.tts_settings import save_settings, settings_for
+from app.services.tts_events import finish_event, start_event
 from app.services.card_submissions import (
     MAX_IMAGE_BYTES, approved_cards_for, create_submission, image_for,
     review_submission, submissions_for, submissions_for_review, submit_draft,
@@ -72,6 +73,25 @@ class TtsSettingsRequest(BaseModel):
 
 class TtsSettingsResponse(TtsSettingsRequest):
     pass
+
+
+class TtsEventRequest(BaseModel):
+    request_id: UUID
+    content_type: Literal['card', 'sentence', 'preview']
+    char_count: int = Field(ge=1, le=500)
+
+
+class TtsEventResultRequest(BaseModel):
+    status: Literal['succeeded', 'failed', 'cancelled']
+    error_code: str = Field(default='', max_length=80)
+
+
+class TtsEventResponse(BaseModel):
+    id: UUID
+    status: str
+    error_code: str | None = None
+    requested_at: datetime | None = None
+    completed_at: datetime | None = None
 
 
 class LoginResponse(BaseModel):
@@ -235,6 +255,18 @@ def get_tts_settings(user=Depends(current_user)):
 def put_tts_settings(request: TtsSettingsRequest, user=Depends(current_user)):
     require_communicator(user)
     return save_settings(user['id'], request.preset, request.voice_name.strip(), request.rate, request.pitch)
+
+
+@api_router.post('/tts/events', response_model=TtsEventResponse, status_code=201, tags=['음성'])
+def create_tts_event(request: TtsEventRequest, user=Depends(current_user)):
+    require_communicator(user)
+    return start_event(user['id'], str(request.request_id), request.content_type, request.char_count)
+
+
+@api_router.patch('/tts/events/{request_id}', response_model=TtsEventResponse, tags=['음성'])
+def complete_tts_event(request_id: UUID, request: TtsEventResultRequest, user=Depends(current_user)):
+    require_communicator(user)
+    return finish_event(user['id'], str(request_id), request.status, request.error_code.strip())
 
 
 @api_router.get('/cards', response_model=list[CardResponse], response_model_exclude_none=True, tags=['카드'])

@@ -1,8 +1,8 @@
 """Versioned persona and output rules for AAC sentence generation."""
 
 PERSONA_VERSION = 'aac-ko-v1'
-OUTPUT_RULES_VERSION = 'sentence-output-v1'
-RULE_ENGINE_VERSION = 'ko-particle-v1'
+OUTPUT_RULES_VERSION = 'sentence-output-v2'
+RULE_ENGINE_VERSION = 'ko-particle-v2'
 SAFETY_POLICY_VERSION = 'sentence-safety-v1'
 
 PERSONA = (
@@ -11,7 +11,9 @@ PERSONA = (
 )
 
 OUTPUT_RULES = (
-    '선택한 카드의 순서와 대상, 행동, 감정, 부정 의미를 모두 유지합니다.',
+    '선택한 카드의 대상, 행동, 감정, 부정 의미를 빠짐없이 유지합니다.',
+    '카드 나열을 그대로 복사하지 말고 조사, 어미와 어순을 자연스러운 한국어 문법에 맞게 바꿉니다.',
+    '같은 카드의 반복은 강조로 이해하며 같은 단어를 불필요하게 반복하지 않습니다.',
     '어린 사용자가 바로 말할 수 있는 짧고 쉬운 존댓말 한 문장만 출력합니다.',
     '카드에 없는 사람, 장소, 원인, 개인정보나 새로운 사실을 추론하지 않습니다.',
     '비속어와 유해 표현을 추가하지 않습니다.',

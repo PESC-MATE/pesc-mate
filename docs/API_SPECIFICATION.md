@@ -214,8 +214,8 @@ Authorization: Bearer {access_token}
   "model": "qwen2.5:0.5b",
   "policy_versions": {
     "persona": "aac-ko-v1",
-    "output_rules": "sentence-output-v1",
-    "rule_engine": "ko-particle-v1",
+    "output_rules": "sentence-output-v2",
+    "rule_engine": "ko-particle-v2",
     "safety": "sentence-safety-v1"
   }
 }

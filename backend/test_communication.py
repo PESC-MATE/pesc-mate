@@ -76,6 +76,11 @@ class CommunicationTests(unittest.TestCase):
         self.assertEqual(sentence(['me', 'home', 'go']), '저는 집에 가고 싶어요.')
         self.assertEqual(sentence(['water', 'no']), '물이 싫어요.')
 
+    def test_rule_sentence_naturalizes_repeated_negation_and_actions(self):
+        self.assertEqual(sentence(['no', 'eat', 'drink', 'no', 'no']),
+                         '먹거나 마시는 게 싫어요.')
+        self.assertEqual(sentence(['no', 'rice', 'apple']), '밥과 사과가 싫어요.')
+
     def test_semantic_validation_accepts_inflections_and_synonyms(self):
         cards = {card['id']: card for card in CARDS}
         result = validate_semantics(
@@ -166,9 +171,9 @@ class CommunicationTests(unittest.TestCase):
         with self.assertRaises(HTTPException): save_session(SentenceRequest(cards=['invalid'], request_id=uuid4()), 'demo')
         self.assertEqual(statistics('demo')['sessions'], 0)
 
-    def test_fallback_preserves_negation_and_duplicates(self):
+    def test_fallback_treats_duplicates_as_emphasis(self):
         result = save_session(SentenceRequest(cards=['water', 'no', 'water'], request_id=uuid4()), 'demo')
-        self.assertEqual(result['sentence'], '물 · 싫어요 · 물')
+        self.assertEqual(result['sentence'], '물이 싫어요.')
         self.assertEqual(statistics('demo')['top_cards'][0]['count'], 2)
 
     def test_statistics_can_filter_recent_period(self):

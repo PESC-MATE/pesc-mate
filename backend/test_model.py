@@ -24,6 +24,18 @@ class ModelTests(unittest.TestCase):
         payload = json.loads(request.data)
         self.assertEqual(payload['system'], system_prompt())
         self.assertIn('카드에 없는 사람', payload['system'])
+        self.assertIn('카드를 단순히 이어 붙이지 말고', payload['prompt'])
+        self.assertIn('주어를 새로 추가하지 마세요', payload['prompt'])
+        self.assertIn('그대로 출력하세요', payload['prompt'])
+        self.assertIn('먹거나 마시는 게 싫어요.', payload['prompt'])
+
+    @patch('app.services.model.urlopen')
+    def test_multiple_outputs_or_unselected_subject_use_rule(self, mocked_urlopen):
+        for generated in ('먹는 게 싫어요. / 마시는 게 싫어요.', '저는 먹는 게 싫어요.'):
+            mocked_urlopen.return_value = io.BytesIO(json.dumps({'response': generated}).encode())
+            with patch.dict(os.environ, {'OLLAMA_ENABLED': 'true'}):
+                self.assertEqual(generate_sentence(['먹다'], '먹고 싶어요.'),
+                                 ('먹고 싶어요.', 'rule'))
 
     def test_status_exposes_generation_policy_versions(self):
         model_status = status()

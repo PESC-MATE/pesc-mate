@@ -57,6 +57,15 @@ PREDICATE_PHRASES = {
     'yes': '네.',
 }
 
+NEGATIVE_ACTIONS = {
+    'drink': ('마시거나', '마시는'),
+    'eat': ('먹거나', '먹는'),
+    'go': ('가거나', '가는'),
+    'rest': ('쉬거나', '쉬는'),
+    'play': ('놀거나', '노는'),
+    'help': ('도움을 요청하거나', '도움을 요청하는'),
+}
+
 
 def _collection():
     return database().communication_sessions
@@ -96,11 +105,34 @@ def _predicate_phrase(card):
     return f"{label}{'' if label.endswith(('.', '!', '?')) else '.'}"
 
 
+def _negative_sentence(selected):
+    if not any(card['id'] == 'no' for card in selected):
+        return None
+    meaningful = []
+    seen = set()
+    for card in selected:
+        if card['id'] != 'no' and card['id'] not in seen:
+            meaningful.append(card)
+            seen.add(card['id'])
+    if not meaningful:
+        return '싫어요.'
+    if all(card['id'] in NEGATIVE_ACTIONS for card in meaningful):
+        phrases = [NEGATIVE_ACTIONS[card['id']][0] for card in meaningful[:-1]]
+        phrases.append(f"{NEGATIVE_ACTIONS[meaningful[-1]['id']][1]} 게 싫어요.")
+        return ' '.join(phrases)
+    if all(card['sentence_role'] == 'object' for card in meaningful):
+        return f"{_format_group(meaningful, 'subject')} 싫어요."
+    return None
+
+
 def sentence(ids, card_index=None):
     cards = card_index or INDEX
     if any(key not in cards for key in ids):
         raise HTTPException(422, '알 수 없는 카드가 포함되어 있습니다.')
     selected = [with_inferred_metadata(cards[key]) for key in ids]
+    negative_sentence = _negative_sentence(selected)
+    if negative_sentence:
+        return negative_sentence
     if selected and selected[-1]['sentence_role'] in {'predicate', 'response'}:
         predicate = selected[-1]
         arguments = selected[:-1]

@@ -4,6 +4,28 @@ import { hasToken, request, requestBlob, setToken } from "./services/api";
 import { clearBoard, loadBoard, saveBoard } from "./services/boardStorage";
 import cardSprite from "./assets/cards/pecs-card-sprite.png";
 
+const CARD_IMAGE_MODULES = import.meta.glob('./assets/cards/*.png', {
+  eager: true,
+  query: '?url',
+  import: 'default',
+});
+
+const CARD_IMAGE_NAMES = {
+  me: '나.png',
+  water: '물.png',
+  rice: '밥.png',
+  apple: '사과.png',
+  drink: '물을 마시다.png',
+  eat: '밥을 먹다.png',
+  go: '가다.png',
+  rest: '쉬다.png',
+};
+
+const CARD_IMAGES = Object.fromEntries(Object.entries(CARD_IMAGE_NAMES).map(([id, filename]) => [
+  id,
+  CARD_IMAGE_MODULES[`./assets/cards/${filename}`],
+]));
+
 const CARD_META = Object.fromEntries([
   ['me', '나'], ['mom', '엄마'], ['water', '물'], ['rice', '밥'], ['apple', '사과'], ['milk', '우유'],
   ['drink', '마시다'], ['eat', '먹다'], ['go', '가다'], ['rest', '쉬다'], ['play', '놀다'], ['help', '도와주세요'],
@@ -345,6 +367,7 @@ function App() {
   }
   function artStyle(card) {
     if (card.image_src) return { backgroundImage: `url(${card.image_src})`, backgroundPosition: 'center', backgroundSize: 'cover' };
+    if (CARD_IMAGES[card.id]) return { backgroundImage: `url(${CARD_IMAGES[card.id]})`, backgroundPosition: 'center', backgroundSize: 'cover' };
     return { backgroundImage: `url(${cardSprite})`, backgroundPosition: `${(card.image_index % 6) * 20}% ${Math.floor(card.image_index / 6) * 50}%` };
   }
   function cardArt(card, className = 'card-art') {

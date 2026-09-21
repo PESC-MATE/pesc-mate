@@ -21,3 +21,4 @@ reference/
 Thumbs.db
 
 *.png
+!frontend/src/assets/cards/*.png

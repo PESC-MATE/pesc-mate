@@ -33,6 +33,26 @@ CARDS = [with_inferred_metadata(dict(id=key, label=label, symbol=symbol, categor
 ])]
 INDEX = {card['id']: card for card in CARDS}
 
+PARTICLES = {
+    'topic': ('은', '는'),
+    'subject': ('이', '가'),
+    'object': ('을', '를'),
+    'with': ('과', '와'),
+}
+
+PREDICATE_PHRASES = {
+    'drink': '마시고 싶어요.',
+    'eat': '먹고 싶어요.',
+    'go': '가고 싶어요.',
+    'rest': '쉬고 싶어요.',
+    'play': '놀고 싶어요.',
+    'help': '도와주세요.',
+    'happy': '좋아요.',
+    'hurt': '아파요.',
+    'no': '싫어요.',
+    'yes': '네.',
+}
+
 
 def _collection():
     return database().communication_sessions
@@ -49,20 +69,54 @@ def _public(document):
     return result
 
 
+def attach_particle(card, kind):
+    if kind == 'location':
+        return f"{card['label']}에"
+    batchim_particle, vowel_particle = PARTICLES[kind]
+    return f"{card['label']}{batchim_particle if card['has_batchim'] else vowel_particle}"
+
+
+def _format_group(cards, final_particle):
+    if not cards:
+        return ''
+    connected = [attach_particle(card, 'with') for card in cards[:-1]]
+    return ' '.join(connected + [attach_particle(cards[-1], final_particle)])
+
+
+def _predicate_phrase(card):
+    if card['id'] in PREDICATE_PHRASES:
+        return PREDICATE_PHRASES[card['id']]
+    label = card['label']
+    if card['part_of_speech'] == 'verb' and label.endswith('다'):
+        return f'{label[:-1]}고 싶어요.'
+    return f"{label}{'' if label.endswith(('.', '!', '?')) else '.'}"
+
+
 def sentence(ids, card_index=None):
     cards = card_index or INDEX
     if any(key not in cards for key in ids):
         raise HTTPException(422, '알 수 없는 카드가 포함되어 있습니다.')
-    prefix = '저는 ' if ids[0] == 'me' else ''
-    rest = ids[1:] if prefix else ids
-    if len(rest) == 2:
-        noun, verb = rest
-        objects = dict(water='물을', rice='밥을', apple='사과를', milk='우유를')
-        places = dict(home='집에', toilet='화장실에')
-        if noun in objects and verb in ('eat', 'drink'):
-            return prefix + objects[noun] + (' 먹고 싶어요.' if verb == 'eat' else ' 마시고 싶어요.')
-        if noun in places and verb == 'go':
-            return prefix + places[noun] + ' 가고 싶어요.'
+    selected = [with_inferred_metadata(cards[key]) for key in ids]
+    if selected and selected[-1]['sentence_role'] in {'predicate', 'response'}:
+        predicate = selected[-1]
+        arguments = selected[:-1]
+        subjects = [card for card in arguments if card['sentence_role'] == 'subject']
+        objects = [card for card in arguments if card['sentence_role'] == 'object']
+        destinations = [card for card in arguments if card['sentence_role'] == 'destination']
+        parts = []
+        if subjects:
+            if len(subjects) == 1 and subjects[0]['id'] == 'me':
+                parts.append(attach_particle(subjects[0] | {'label': '저', 'has_batchim': False}, 'topic'))
+            else:
+                parts.append(_format_group(subjects, 'subject'))
+        if objects:
+            object_particle = 'subject' if predicate['part_of_speech'] == 'adjective' else 'object'
+            parts.append(_format_group(objects, object_particle))
+        if destinations:
+            parts.append(_format_group(destinations, 'location'))
+        if len(subjects) + len(objects) + len(destinations) == len(arguments):
+            parts.append(_predicate_phrase(predicate))
+            return ' '.join(parts)
     return ' · '.join(cards[key]['label'] for key in ids)
 
 

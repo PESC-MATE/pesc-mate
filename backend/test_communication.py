@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 from pymongo.errors import DuplicateKeyError
 from app.api.router import SentenceRequest
-from app.services.communication import CARDS, ensure_demo_history, save_session, statistics
+from app.services.communication import CARDS, attach_particle, ensure_demo_history, save_session, sentence, statistics
 
 
 class Cursor(list):
@@ -57,6 +57,23 @@ class CommunicationTests(unittest.TestCase):
         self.assertFalse(cards['apple']['has_batchim'])
         self.assertEqual(cards['me']['sentence_role'], 'subject')
         self.assertEqual(cards['go']['part_of_speech'], 'verb')
+
+    def test_particles_follow_batchim_and_sentence_role(self):
+        cards = {card['id']: card for card in CARDS}
+        self.assertEqual(attach_particle(cards['water'], 'topic'), '물은')
+        self.assertEqual(attach_particle(cards['apple'], 'topic'), '사과는')
+        self.assertEqual(attach_particle(cards['water'], 'subject'), '물이')
+        self.assertEqual(attach_particle(cards['apple'], 'subject'), '사과가')
+        self.assertEqual(attach_particle(cards['water'], 'object'), '물을')
+        self.assertEqual(attach_particle(cards['apple'], 'object'), '사과를')
+        self.assertEqual(attach_particle(cards['water'], 'with'), '물과')
+        self.assertEqual(attach_particle(cards['apple'], 'with'), '사과와')
+
+    def test_rule_sentence_uses_roles_and_particles(self):
+        self.assertEqual(sentence(['mom', 'happy']), '엄마가 좋아요.')
+        self.assertEqual(sentence(['water', 'apple', 'eat']), '물과 사과를 먹고 싶어요.')
+        self.assertEqual(sentence(['me', 'home', 'go']), '저는 집에 가고 싶어요.')
+        self.assertEqual(sentence(['water', 'no']), '물이 싫어요.')
 
     def test_sentence_persistence_and_retry(self):
         request = SentenceRequest(cards=['me', 'water', 'drink'], request_id=uuid4())

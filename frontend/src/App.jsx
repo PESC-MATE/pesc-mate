@@ -1,3 +1,4 @@
+import { Avatar, ProfileEditor } from './Profile';
 import { useEffect, useRef, useState } from "react";
 
 import { hasToken, request, requestBlob, setToken } from "./services/api";
@@ -40,6 +41,8 @@ const TTS_PRESETS = {
 
 function App() {
   const [user, setUser] = useState(null);
+  const [showProfile, setShowProfile] = useState(false);
+  const [profileNotice, setProfileNotice] = useState('');
   const [authReady, setAuthReady] = useState(false);
   const [username, setUsername] = useState('demo');
   const [password, setPassword] = useState('demo1234');
@@ -148,7 +151,7 @@ function App() {
       const path = authMode === 'register' ? '/auth/register' : '/auth/login';
       const body = authMode === 'register' ? { username, password, name } : { username, password };
       const result = await request(path, { method: 'POST', body: JSON.stringify(body) });
-      setToken(result.access_token); setUser(result.user);
+      setToken(result.access_token); setUser(result.user); setShowProfile(false); setProfileNotice('');
       await load(result.user);
     } catch (e) { setError(e.message); }
     finally { setBusy(false); setAuthReady(true); }
@@ -159,7 +162,7 @@ function App() {
     await stopSpeech();
     try { await request('/auth/logout', { method: 'POST' }); } catch { /* local logout still applies */ }
     clearBoard(user?.id);
-    setToken(null); setUser(null); setLoaded(false);
+    setToken(null); setUser(null); setLoaded(false); setShowProfile(false); setProfileNotice('');
     [...cards, ...recommended, ...adminSubmissions].forEach(item => { if (item.image_src) URL.revokeObjectURL(item.image_src); });
     setCards([]); setRecommended([]); setStats(null); setBoard([]); setCardSubmissions([]); setAdminSubmissions([]); setLinkedUsers([]); setSelectedUser(null); setText(''); setError(''); setTab('home');
     setTtsSettings({ preset: 'child', voiceName: '', rate: 0.9, pitch: 1.25 }); setTtsSettingsSaved(false); setSpeechFailure(null); setBusy(false);
@@ -427,16 +430,21 @@ function App() {
     <button className="auth-switch" disabled={busy} onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setError(''); setUsername(''); setPassword(''); setPasswordConfirm(''); setName(''); }}>{authMode === 'login' ? '처음 이용하시나요? 사용자 가입' : '이미 계정이 있나요? 로그인'}</button>
     {authMode === 'login' && <p className="demo-account">사용자: <code>demo</code> / <code>demo1234</code><br />보호자: <code>caregiver</code> / <code>caregiver1234</code><br />관리자: <code>admin</code> / <code>admin1234</code></p>}
   </section></main>;
+  if (!user.profile || showProfile) return <main className="login-page"><ProfileEditor key={user.id} user={user}
+    onSaved={account => { setUser(account); setShowProfile(false); setProfileNotice('프로필을 저장했습니다.'); }}
+    onCancel={user.profile ? () => setShowProfile(false) : handleLogout} /></main>;
   return <main className="app">
     <aside className="sidebar">
       <div className="sidebar-brand"><span className="brand-mark" aria-hidden="true">💬</span><strong>PESC<br />MATE</strong></div>
-      <div className="profile"><span className="profile-avatar" aria-hidden="true">{user.role === 'admin' ? '🛡️' : '😊'}</span><div><strong>{user.name}</strong><small>{user.role === 'admin' ? '컨텐츠 관리자' : user.role === 'caregiver' ? '보호자 계정' : 'PECS 사용자'}</small></div></div>
+      <div className="profile"><Avatar user={user} /><div><strong>{user.name}</strong><small>{user.role === 'admin' ? '컨텐츠 관리자' : user.role === 'caregiver' ? '보호자 계정' : 'PECS 사용자'}</small></div></div>
       <nav aria-label="주 메뉴">{user.role === 'admin' ? <button className="active" onClick={() => setTab('admin')}><span aria-hidden="true">☑</span>카드 승인<i aria-label={`승인 대기 ${adminSubmissions.filter(item => item.status === 'pending').length}개`}>{adminSubmissions.filter(item => item.status === 'pending').length}</i></button> : <>{user.role !== 'caregiver' && <><button className={tab === 'home' ? 'active' : ''} onClick={() => setTab('home')}><span aria-hidden="true">⌂</span>홈</button><button className={tab === 'cards' ? 'active' : ''} onClick={() => setTab('cards')}><span aria-hidden="true">▦</span>그림으로 말하기<i aria-label={`추천 카드 ${recommended.length}개`}>{recommended.length}</i></button><button className={tab === 'catalog' ? 'active' : ''} onClick={() => setTab('catalog')}><span aria-hidden="true">▤</span>카드</button></>}<button className={tab === 'dashboard' ? 'active' : ''} onClick={() => setTab('dashboard')}><span aria-hidden="true">▥</span>{user.role === 'caregiver' ? '보호자 현황' : '나의 이용 기록'}</button></>}</nav>
+      <button type="button" onClick={() => { stopSpeech(); setShowProfile(true); setProfileNotice(''); }}>프로필 설정</button>
       <div className="sidebar-summary"><small>오늘의 의사소통</small><strong>{stats?.today_sessions || 0}개 문장</strong><span>{stats?.today_selections || 0}장의 카드를 사용했어요</span></div>
       <div className="sidebar-tip"><span aria-hidden="true">🌱</span><div><small>도움말</small><strong>그림을 차례대로 눌러<br />마음을 표현해 보세요.</strong></div></div>
       <button className="logout" onClick={handleLogout} disabled={busy}>로그아웃</button>
     </aside>
     <div className="app-content">
+      {profileNotice && <p role="status">{profileNotice}</p>}
       <header className="topbar"><div><p className="eyebrow">오늘은 {todayLabel}</p><h1>{pageTitle}</h1></div><div className="topbar-statuses"><span className="status"><b className={loaded ? 'online' : ''}></b>{loaded ? '서비스 연결됨' : '연결 대기'}</span>{speechActive && <div className={`speech-player ${speechState.status}`} role="status" aria-live="polite"><span><b aria-hidden="true">🔊</b><strong>{speechStatusLabel}</strong><small title={speechState.content}>{speechState.content}</small></span>{speechState.status === 'playing' && <button type="button" onClick={pauseSpeech}>일시 정지</button>}{speechState.status === 'paused' && <button type="button" onClick={resumeSpeech}>재개</button>}<button type="button" onClick={stopSpeech}>중지</button></div>}</div></header>
       {error && <div role="alert" className="error">{error} <button disabled={busy} onClick={() => load(user)}>다시 연결</button></div>}
       {speechFailure && <div role="alert" className="speech-error"><span aria-hidden="true">🔇</span><div><strong>음성을 재생하지 못했어요.</strong><p>{speechFailureMessage(speechFailure.errorCode)} 선택한 카드와 문장은 그대로 유지됩니다.</p></div><div className="speech-error-actions">{speechFailure.retryable && <button className="primary" onClick={() => speakText(speechFailure.content, speechFailure.contentType)}>다시 재생</button>}<button onClick={() => setSpeechFailure(null)}>닫기</button></div></div>}
@@ -457,7 +465,7 @@ function App() {
             <span className="home-card-label"><small>그림과 뜻을 차근차근 살펴봐요</small><strong>카드</strong><b aria-hidden="true">→</b></span>
           </button>
         </div>
-        <div className="home-note"><span aria-hidden="true">🌱</span><div><strong>{user.name}님, 반가워요!</strong><p>그림 카드를 눌러 오늘의 이야기를 시작해 보세요.</p></div></div>
+        <div className="home-note"><Avatar user={user} /><div><strong>{user.name}님, 반가워요!</strong><p>그림 카드를 눌러 오늘의 이야기를 시작해 보세요.</p></div></div>
       </section> : tab === 'cards' && user.role !== 'caregiver' ? <div className="communication-layout">
       <section className="recommend-panel"><div className="stage-title"><span className="stage-back" aria-hidden="true">‹‹</span><div><strong>오늘의 추천 카드</strong><i aria-hidden="true"><b></b><b></b><b></b></i><p>자주 쓰는 카드를 골라 문장을 시작해요</p></div><span className="stage-helper" aria-hidden="true">🌱</span></div><div className="cards recommendations">{recommended.map(tile)}</div><div className="stage-ground" aria-hidden="true">▲　▲　　▲　　　▲　▲</div></section>
       <div className="workspace"><section><div className="section-title"><h2>무엇을 말하고 싶나요?</h2><input aria-label="카드 검색" placeholder="카드 이름 검색" value={search} onChange={e => setSearch(e.target.value)} /></div>
@@ -528,6 +536,7 @@ function App() {
       </article>)}</div>
       {!adminSubmissions.length && <p className="empty">아직 제출된 카드가 없습니다.</p>}
     </section> : <section className="dashboard"><div className="panel-heading"><span aria-hidden="true">🏆</span><div><h2>{user.role === 'caregiver' ? '보호 대상 의사소통 기록' : '나의 의사소통 기록'}</h2><p className="muted">{(selectedUser || user).name} · {period === 'all' ? '전체 기간' : `최근 ${period}일`} · 문장 저장 기준</p></div></div>
+      {user.role === 'caregiver' && selectedUser && <div className="profile"><Avatar user={selectedUser} /><strong>{selectedUser.name}</strong></div>}
       {user.role === 'caregiver' && <label className="user-picker">조회 사용자<select value={selectedUser?.id || ''} onChange={event => changeLinkedUser(event.target.value)} disabled={statsBusy}>{linkedUsers.map(person => <option key={person.id} value={person.id}>{person.name} ({person.username})</option>)}</select></label>}
       <div className="period-filter" aria-label="조회 기간">{[['7', '최근 7일'], ['30', '최근 30일'], ['all', '전체']].map(([value, label]) => <button key={value} className={period === value ? 'active' : ''} aria-pressed={period === value} disabled={statsBusy} onClick={() => changePeriod(value)}>{label}</button>)}</div>
       {statsBusy && <p className="muted" role="status">통계를 불러오는 중입니다…</p>}

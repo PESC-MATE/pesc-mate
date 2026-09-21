@@ -9,6 +9,28 @@ from app.api.router import UserResponse
 
 
 class ProfileTests(unittest.TestCase):
+    @patch('app.services.authentication._database')
+    @patch('app.services.profiles.database')
+    def test_saved_profile_survives_new_authenticated_session(self, profile_db, auth_db):
+        from datetime import datetime, timedelta, timezone
+        from fastapi.security import HTTPAuthorizationCredentials
+        from app.services.authentication import current_user, linked_users
+        stored = dict(_id='u', username='u', name='User', role='user')
+        database = MagicMock()
+        profile_db.return_value = auth_db.return_value = database
+        def update(query, changes):
+            stored.update(changes['$set'])
+            return MagicMock(matched_count=1)
+        database.users.update_one.side_effect = update
+        database.users.find_one.side_effect = lambda query: dict(stored)
+        database.auth_sessions.find_one.return_value = dict(user_id='u', expires_at=datetime.now(timezone.utc)+timedelta(hours=1))
+        save_profile('u', preset='dragon')
+        for token in ('first-device', 'second-device'):
+            account = current_user(HTTPAuthorizationCredentials(scheme='Bearer', credentials=token))
+            self.assertEqual(account['profile'], dict(kind='preset', preset='dragon'))
+        database.caregiver_links.find.return_value = [dict(user_id='u')]
+        self.assertEqual(linked_users('caregiver')[0]['profile'], account['profile'])
+
     def test_presets_include_all_twelve_animals(self):
         self.assertEqual(len(PRESETS), 14)
         self.assertEqual(len({p['id'] for p in PRESETS}), 14)

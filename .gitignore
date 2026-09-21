@@ -20,5 +20,5 @@ reference/
 .DS_Store
 Thumbs.db
 
-*.png
+.png
 !frontend/src/assets/cards/*.png

@@ -5,11 +5,11 @@ from app.services.database import database
 from app.services.card_submissions import _normalize_image
 from app.services.image_safety import check_image_safety
 
-PRESETS = [dict(id='man', label='남자', symbol='👦'), dict(id='woman', label='여자', symbol='👧')]
-PRESETS += [dict(id=k, label=n+'띠', symbol=s) for k,n,s in [
-    ('rat','쥐','🐭'), ('ox','소','🐮'), ('tiger','호랑이','🐯'), ('rabbit','토끼','🐰'),
-    ('dragon','용','🐲'), ('snake','뱀','🐍'), ('horse','말','🐴'), ('sheep','양','🐑'),
-    ('monkey','원숭이','🐵'), ('rooster','닭','🐔'), ('dog','개','🐶'), ('pig','돼지','🐷')]]
+PRESETS = [
+    dict(id='pink', label='핑크'),
+    dict(id='orange', label='오렌지'),
+    dict(id='sky', label='하늘'),
+]
 
 
 def public_profile(user):

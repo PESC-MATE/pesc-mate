@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { request, requestBlob } from './services/api';
+import pinkProfile from './assets/profiles/PF01_pink.png';
+import orangeProfile from './assets/profiles/PF02_orange.png';
+import skyProfile from './assets/profiles/PF03_sky.png';
 
-const SYMBOLS = {man:'👦', woman:'👧', rat:'🐭', ox:'🐮', tiger:'🐯', rabbit:'🐰', dragon:'🐲', snake:'🐍', horse:'🐴', sheep:'🐑', monkey:'🐵', rooster:'🐔', dog:'🐶', pig:'🐷'};
+const PRESET_IMAGES = { pink: pinkProfile, orange: orangeProfile, sky: skyProfile };
 
 export function Avatar({ user }) {
   const [image, setImage] = useState(null);
@@ -17,8 +20,10 @@ export function Avatar({ user }) {
     }).catch(() => {});
     return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [url]);
+  const presetImage = PRESET_IMAGES[user?.profile?.preset] || pinkProfile;
   return <span className="profile-avatar" role="img" aria-label={`${user?.name || '사용자'} 프로필`}>
-    {image?.url === url && image ? <img src={image.src} alt="" /> : SYMBOLS[user?.profile?.preset] || '😊'}
+    {image?.url === url && image ? <img src={image.src} alt="" />
+      : <img src={presetImage} alt="" />}
   </span>;
 }
 
@@ -34,7 +39,11 @@ export function ProfileEditor({ user, onSaved, onCancel }) {
   useEffect(() => {
     let active = true;
     setError('');
-    request('/profile/presets').then(items => { if (active) setPresets(items); }).catch(e => { if (active) setError(e.message); });
+    request('/profile/presets').then(items => {
+      if (!active) return;
+      setPresets(items);
+      setPreset(current => items.some(item => item.id === current) ? current : '');
+    }).catch(e => { if (active) setError(e.message); });
     return () => { active = false; };
   }, [retry]);
   useEffect(() => {
@@ -60,14 +69,14 @@ export function ProfileEditor({ user, onSaved, onCancel }) {
   }
   return <section className="profile-editor" aria-labelledby="profile-title">
     <h2 id="profile-title">{user.profile ? '프로필 설정' : '처음 사용할 프로필을 골라 주세요'}</h2>
-    <p>남자, 여자, 띠별 캐릭터 또는 직접 등록한 사진을 사용할 수 있어요.</p>
+    <p>좋아하는 색의 PESC MATE 캐릭터 또는 직접 등록한 사진을 사용할 수 있어요.</p>
     <form onSubmit={save}>
       <fieldset disabled={busy}><legend>프로필 이미지 선택</legend>
         <div className="profile-options">{presets.map(item => <label key={item.id} className={(!custom && preset === item.id) ? 'selected' : ''}>
           <input type="radio" name="profile" checked={!custom && preset === item.id} onChange={() => { setPreset(item.id); setCustom(false); }} />
-          <span aria-hidden="true">{item.symbol}</span>{item.label}
+          <img className="profile-preset-image" src={PRESET_IMAGES[item.id]} alt="" />{item.label}
         </label>)}
-        <label className={custom ? 'selected' : ''}><input type="radio" name="profile" checked={custom} onChange={() => setCustom(true)} /><span aria-hidden="true">📷</span>직접 등록</label></div>
+        <label className={custom ? 'selected' : ''}><input type="radio" name="profile" checked={custom} onChange={() => setCustom(true)} /><span className="profile-upload-mark" aria-hidden="true">+</span>직접 등록</label></div>
         {custom && <div className="profile-upload"><label>사진 선택<input type="file" accept="image/jpeg,image/png,image/webp" onChange={event => {
           const chosen = event.target.files?.[0]; setError(''); setFile(null);
           if (!chosen) return;

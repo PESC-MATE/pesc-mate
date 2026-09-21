@@ -566,6 +566,8 @@ footer { color: #9aa0aa; }
 .profile-options label:focus-within { outline: 3px solid #326da8; outline-offset: 2px; }
 .profile-options input { width: auto; }
 .profile-options span { font-size: 32px; }
+.profile-preset-image { width: 96px; height: 96px; object-fit: contain; }
+.profile-upload-mark { display: grid; place-items: center; width: 72px; height: 72px; border: 2px dashed #9eb4c8; border-radius: 50%; color: #326da8; background: #f4f9ff; font-weight: 800; }
 .profile-upload { margin-top: 18px; }
 .profile-upload input { width: 100%; }
 .profile-upload p { color: #526174; font-size: 14px; }

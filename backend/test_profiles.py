@@ -24,27 +24,30 @@ class ProfileTests(unittest.TestCase):
         database.users.update_one.side_effect = update
         database.users.find_one.side_effect = lambda query: dict(stored)
         database.auth_sessions.find_one.return_value = dict(user_id='u', expires_at=datetime.now(timezone.utc)+timedelta(hours=1))
-        save_profile('u', preset='dragon')
+        save_profile('u', preset='pink')
         for token in ('first-device', 'second-device'):
             account = current_user(HTTPAuthorizationCredentials(scheme='Bearer', credentials=token))
-            self.assertEqual(account['profile'], dict(kind='preset', preset='dragon'))
+            self.assertEqual(account['profile'], dict(kind='preset', preset='pink'))
         database.caregiver_links.find.return_value = [dict(user_id='u')]
         self.assertEqual(linked_users('caregiver')[0]['profile'], account['profile'])
 
-    def test_presets_include_all_twelve_animals(self):
-        self.assertEqual(len(PRESETS), 14)
-        self.assertEqual(len({p['id'] for p in PRESETS}), 14)
+    def test_presets_include_three_profile_images(self):
+        self.assertEqual(PRESETS, [
+            dict(id='pink', label='핑크'),
+            dict(id='orange', label='오렌지'),
+            dict(id='sky', label='하늘'),
+        ])
 
     def test_legacy_user_and_response_preserve_profile(self):
         user = dict(_id='u', username='u', name='User', role='user')
         self.assertIsNone(_public_user(user)['profile'])
-        user['profile'] = dict(kind='preset', preset='rabbit')
-        self.assertEqual(UserResponse(**_public_user(user)).profile.preset, 'rabbit')
+        user['profile'] = dict(kind='preset', preset='sky')
+        self.assertEqual(UserResponse(**_public_user(user)).profile.preset, 'sky')
 
     @patch('app.services.profiles.database')
     def test_save_scopes_update_and_replaces_previous_image(self, db):
-        self.assertEqual(save_profile('u', preset='rat'), dict(kind='preset', preset='rat'))
-        db().users.update_one.assert_called_once_with({'_id': 'u'}, {'$set': {'profile': dict(kind='preset', preset='rat')}})
+        self.assertEqual(save_profile('u', preset='orange'), dict(kind='preset', preset='orange'))
+        db().users.update_one.assert_called_once_with({'_id': 'u'}, {'$set': {'profile': dict(kind='preset', preset='orange')}})
 
     @patch('app.services.profiles.database')
     def test_unknown_preset_does_not_write(self, db):

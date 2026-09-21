@@ -22,3 +22,4 @@ Thumbs.db
 
 .png
 !frontend/src/assets/cards/*.png
+!frontend/src/assets/profiles/*.png

@@ -2,7 +2,7 @@
 
 ## 종류와 저장
 
-- 남자, 여자, 12지 띠별 캐릭터, 직접 등록을 지원한다. 기본 캐릭터는 이모지로 표시하며 기기별 그림체는 다를 수 있다.
+- 핑크, 오렌지, 하늘색 PESC MATE 캐릭터 이미지와 직접 등록을 지원한다.
 - 회원가입 직후 또는 기존 계정의 최초 로그인에서 프로필을 선택한다. 프로필이 없으면 기능 화면 진입 전에 선택 화면을 표시한다.
 - 모든 역할은 본인 프로필만 변경할 수 있다. 설정 저장 후 홈과 사이드바에 즉시 반영한다.
 - MongoDB users.profile에 저장한다. 로그인, 인증 정보 조회, 보호자의 연결 사용자 조회 응답에 프로필을 포함한다.
@@ -20,8 +20,8 @@
 
 ## API
 
-- GET /api/profile/presets: 사용 가능한 기본 프로필 id, label, symbol 목록.
-- PUT /api/profile: JSON {"preset":"rabbit"}로 본인 프로필 변경.
+- GET /api/profile/presets: 사용 가능한 기본 프로필 id와 label 목록.
+- PUT /api/profile: JSON {"preset":"pink"}로 본인 프로필 변경.
 - POST /api/profile/image: multipart image 파일로 본인 프로필 변경.
 - GET /api/profile/{user_id}/image: 권한 검사 후 WebP 반환.
 - 로그인과 /api/auth/me, /api/care/linked-users의 사용자 객체에 profile을 추가한다.

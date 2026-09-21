@@ -75,6 +75,8 @@ Authorization: Bearer {access_token}
 | 인증 | POST | `/api/auth/register` | 불필요 | 일반 사용자 가입 및 로그인 |
 | 인증 | GET | `/api/auth/me` | 필요 | 현재 사용자 조회 |
 | 인증 | POST | `/api/auth/logout` | 필요 | 전달된 토큰의 세션 삭제 |
+| 음성 | GET | `/api/tts/settings` | 필요 | 현재 사용자의 TTS 설정 조회 |
+| 음성 | PUT | `/api/tts/settings` | 필요 | 현재 사용자의 TTS 설정 저장 |
 | 보호자 | GET | `/api/care/linked-users` | 필요 | 보호자에게 연결된 사용자 조회 |
 | 보호자 | PUT | `/api/care/notes/{session_id}` | 필요 | 의사소통 기록의 보호자 메모 저장·수정 |
 | 보호자 | DELETE | `/api/care/notes/{session_id}` | 필요 | 보호자 메모 삭제 |
@@ -329,6 +331,26 @@ Authorization: Bearer {access_token}
 ```
 
 현재 보호자가 작성한 해당 기록의 메모를 삭제하며 성공 시 `204 No Content`를 반환한다.
+
+## 6.8 사용자 TTS 설정 조회 및 저장
+
+```http
+GET /api/tts/settings
+PUT /api/tts/settings
+Authorization: Bearer {access_token}
+Content-Type: application/json
+```
+
+```json
+{
+  "preset": "child",
+  "voice_name": "Microsoft Heami",
+  "rate": 0.9,
+  "pitch": 1.25
+}
+```
+
+일반 사용자 본인의 음성 프리셋, 기기 음성 이름, 속도 및 음높이를 조회하거나 저장한다. 저장된 설정이 없으면 어린이 느낌 기본값을 반환한다. `preset`은 `child`, `woman`, `man` 중 하나이며 속도와 음높이는 `0.5`부터 `1.5`까지 허용한다.
 
 # 7. 카드 API
 

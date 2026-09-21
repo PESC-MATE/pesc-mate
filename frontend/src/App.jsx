@@ -50,6 +50,8 @@ function App() {
   const [speaking, setSpeaking] = useState(false);
   const [ttsVoices, setTtsVoices] = useState([]);
   const [ttsSettings, setTtsSettings] = useState({ preset: 'child', voiceName: '', rate: 0.9, pitch: 1.25 });
+  const [ttsSettingsBusy, setTtsSettingsBusy] = useState(false);
+  const [ttsSettingsSaved, setTtsSettingsSaved] = useState(false);
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const [linkedUsers, setLinkedUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
@@ -80,9 +82,11 @@ function App() {
         setStats(target ? await request(dashboardPath(period, target)) : null); setLoaded(true);
         return;
       }
-      const [rawCards, rawRecommended, dashboard, submissions] = await Promise.all([request('/cards'), request('/recommendations'), request(dashboardPath()), request('/cards/submissions')]);
+      const [rawCards, rawRecommended, dashboard, submissions, voiceSettings] = await Promise.all([request('/cards'), request('/recommendations'), request(dashboardPath()), request('/cards/submissions'), request('/tts/settings')]);
       const [all, rec] = await Promise.all([hydrateImages(rawCards), hydrateImages(rawRecommended)]);
-      setCards(all); setRecommended(rec); setStats(dashboard); setCardSubmissions(submissions); setBoard(loadBoard(account?.id, all)); setLoaded(true);
+      setCards(all); setRecommended(rec); setStats(dashboard); setCardSubmissions(submissions); setBoard(loadBoard(account?.id, all));
+      setTtsSettings({ preset: voiceSettings.preset, voiceName: voiceSettings.voice_name, rate: voiceSettings.rate, pitch: voiceSettings.pitch });
+      setTtsSettingsSaved(true); setLoaded(true);
     } catch (e) {
       if (e.status === 401) { setToken(null); setUser(null); setLoaded(false); setError('로그인이 만료되었습니다. 다시 로그인해 주세요.'); }
       else setError(e.message || '서버에 연결하지 못했습니다.');
@@ -131,7 +135,8 @@ function App() {
     clearBoard(user?.id);
     window.speechSynthesis?.cancel(); setToken(null); setUser(null); setLoaded(false);
     [...cards, ...recommended, ...adminSubmissions].forEach(item => { if (item.image_src) URL.revokeObjectURL(item.image_src); });
-    setCards([]); setRecommended([]); setStats(null); setBoard([]); setCardSubmissions([]); setAdminSubmissions([]); setLinkedUsers([]); setSelectedUser(null); setText(''); setError(''); setTab('home'); setBusy(false);
+    setCards([]); setRecommended([]); setStats(null); setBoard([]); setCardSubmissions([]); setAdminSubmissions([]); setLinkedUsers([]); setSelectedUser(null); setText(''); setError(''); setTab('home');
+    setTtsSettings({ preset: 'child', voiceName: '', rate: 0.9, pitch: 1.25 }); setTtsSettingsSaved(false); setBusy(false);
   }
 
   function updateBoard(next) {
@@ -172,9 +177,25 @@ function App() {
     setSpeaking(true); window.speechSynthesis.speak(utterance);
   }
   function speak() { speakText(text); }
+  function updateTtsSettings(changes) {
+    setTtsSettings(current => ({ ...current, ...changes }));
+    setTtsSettingsSaved(false);
+  }
   function changeTtsPreset(preset) {
     const values = TTS_PRESETS[preset];
-    setTtsSettings(current => ({ ...current, preset, rate: values.rate, pitch: values.pitch }));
+    updateTtsSettings({ preset, rate: values.rate, pitch: values.pitch });
+  }
+  async function saveTtsSettings() {
+    setTtsSettingsBusy(true); setError('');
+    try {
+      const saved = await request('/tts/settings', { method: 'PUT', body: JSON.stringify({
+        preset: ttsSettings.preset, voice_name: ttsSettings.voiceName,
+        rate: ttsSettings.rate, pitch: ttsSettings.pitch,
+      }) });
+      setTtsSettings({ preset: saved.preset, voiceName: saved.voice_name, rate: saved.rate, pitch: saved.pitch });
+      setTtsSettingsSaved(true);
+    } catch (e) { setError(e.message); }
+    finally { setTtsSettingsBusy(false); }
   }
   async function changePeriod(value) {
     setPeriod(value); setStatsBusy(true); setError('');
@@ -364,11 +385,11 @@ function App() {
           <summary>⚙️ 음성 설정</summary>
           <div className="tts-settings-grid">
             <label>음성 느낌<select value={ttsSettings.preset} onChange={event => changeTtsPreset(event.target.value)}>{Object.entries(TTS_PRESETS).map(([value, preset]) => <option key={value} value={value}>{preset.label}</option>)}</select></label>
-            <label>기기 한국어 음성<select value={ttsSettings.voiceName} onChange={event => setTtsSettings(current => ({ ...current, voiceName: event.target.value }))}><option value="">한국어 음성 자동 선택</option>{ttsVoices.map(voice => <option key={voice.voiceURI} value={voice.name}>{voice.name}</option>)}</select></label>
-            <label>속도 <output>{ttsSettings.rate.toFixed(2)}배</output><input type="range" min="0.5" max="1.5" step="0.05" value={ttsSettings.rate} onChange={event => setTtsSettings(current => ({ ...current, rate: Number(event.target.value) }))} /></label>
-            <label>음높이 <output>{ttsSettings.pitch.toFixed(2)}</output><input type="range" min="0.5" max="1.5" step="0.05" value={ttsSettings.pitch} onChange={event => setTtsSettings(current => ({ ...current, pitch: Number(event.target.value) }))} /></label>
+            <label>기기 한국어 음성<select value={ttsSettings.voiceName} onChange={event => updateTtsSettings({ voiceName: event.target.value })}><option value="">한국어 음성 자동 선택</option>{ttsSettings.voiceName && !ttsVoices.some(voice => voice.name === ttsSettings.voiceName) && <option value={ttsSettings.voiceName}>{ttsSettings.voiceName} (현재 기기에 없음)</option>}{ttsVoices.map(voice => <option key={voice.voiceURI} value={voice.name}>{voice.name}</option>)}</select></label>
+            <label>속도 <output>{ttsSettings.rate.toFixed(2)}배</output><input type="range" min="0.5" max="1.5" step="0.05" value={ttsSettings.rate} onChange={event => updateTtsSettings({ rate: Number(event.target.value) })} /></label>
+            <label>음높이 <output>{ttsSettings.pitch.toFixed(2)}</output><input type="range" min="0.5" max="1.5" step="0.05" value={ttsSettings.pitch} onChange={event => updateTtsSettings({ pitch: Number(event.target.value) })} /></label>
           </div>
-          <div className="tts-preview"><small>{ttsVoices.length ? `한국어 음성 ${ttsVoices.length}개를 사용할 수 있어요.` : '기기의 기본 음성으로 재생합니다.'}</small><button type="button" disabled={busy} onClick={() => speakText('안녕하세요. 목소리를 확인해 보세요.')}>미리 듣기</button></div>
+          <div className="tts-preview"><small role="status">{ttsSettingsSaved ? '이 계정에 저장된 설정입니다.' : ttsVoices.length ? `한국어 음성 ${ttsVoices.length}개를 사용할 수 있어요.` : '기기의 기본 음성으로 재생합니다.'}</small><span><button type="button" disabled={busy || ttsSettingsBusy} onClick={() => speakText('안녕하세요. 목소리를 확인해 보세요.')}>미리 듣기</button><button type="button" className="primary" disabled={ttsSettingsBusy || ttsSettingsSaved} onClick={saveTtsSettings}>{ttsSettingsBusy ? '저장 중…' : '설정 저장'}</button></span></div>
         </details>
         <p className="muted">Ollama Qwen으로 문장을 만들며, 모델을 사용할 수 없으면 규칙 기반 문장으로 자동 전환합니다.</p>
       </section></div>

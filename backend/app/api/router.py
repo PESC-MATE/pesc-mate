@@ -7,6 +7,7 @@ from app.services.communication import CARDS, save_session, statistics
 from app.services.authentication import current_user, dashboard_user, linked_users, login, logout, register, security
 from app.services.model import status as model_status
 from app.services.caregiver_notes import delete_note, notes_for, save_note
+from app.services.tts_settings import save_settings, settings_for
 from app.services.card_submissions import (
     MAX_IMAGE_BYTES, approved_cards_for, create_submission, image_for,
     review_submission, submissions_for, submissions_for_review, submit_draft,
@@ -60,6 +61,17 @@ class UserResponse(BaseModel):
     username: str
     name: str
     role: str
+
+
+class TtsSettingsRequest(BaseModel):
+    preset: Literal['child', 'woman', 'man']
+    voice_name: str = Field(default='', max_length=120)
+    rate: float = Field(ge=0.5, le=1.5)
+    pitch: float = Field(ge=0.5, le=1.5)
+
+
+class TtsSettingsResponse(TtsSettingsRequest):
+    pass
 
 
 class LoginResponse(BaseModel):
@@ -211,6 +223,18 @@ def remove_caregiver_note(session_id: UUID,
 def sign_out(_user=Depends(current_user), credentials=Depends(security)):
     logout(credentials)
     return None
+
+
+@api_router.get('/tts/settings', response_model=TtsSettingsResponse, tags=['음성'])
+def get_tts_settings(user=Depends(current_user)):
+    require_communicator(user)
+    return settings_for(user['id'])
+
+
+@api_router.put('/tts/settings', response_model=TtsSettingsResponse, tags=['음성'])
+def put_tts_settings(request: TtsSettingsRequest, user=Depends(current_user)):
+    require_communicator(user)
+    return save_settings(user['id'], request.preset, request.voice_name.strip(), request.rate, request.pitch)
 
 
 @api_router.get('/cards', response_model=list[CardResponse], response_model_exclude_none=True, tags=['카드'])

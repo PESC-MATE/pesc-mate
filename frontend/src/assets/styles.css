@@ -312,6 +312,12 @@ body::before, body::after { display: none; }
 .speech-player button { min-height: 32px; padding: 5px 9px; border-width: 1px; font-size: .72rem; white-space: nowrap; }
 .speech-player.paused { border-color: #e5ca78; background: #fffbea; }
 .speech-player.paused strong { color: #896a0b; }
+.speech-error { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 13px; margin-bottom: 18px; padding: 14px 16px; border: 1px solid #f0b7c1; border-radius: 14px; color: #70414a; background: #fff2f4; }
+.speech-error > span { font-size: 1.6rem; }
+.speech-error strong { color: #9c2940; }
+.speech-error p { margin: 4px 0 0; font-size: .84rem; line-height: 1.5; }
+.speech-error-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.speech-error-actions button { min-height: 36px; padding: 7px 11px; font-size: .78rem; }
 
 .app-content section { border: 0; border-radius: 14px; box-shadow: 0 7px 22px #69748a12; }
 .communication-layout { display: block; }
@@ -520,6 +526,8 @@ footer { color: #9aa0aa; }
   .speech-player { max-width: 100%; flex-wrap: wrap; }
   .speech-player > span { flex: 1 1 100%; }
   .speech-player small { max-width: calc(100vw - 100px); }
+  .speech-error { grid-template-columns: auto 1fr; }
+  .speech-error-actions { grid-column: 1 / -1; }
   .recommendations { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; overflow: visible; padding: 0; }
   .recommendations .card { min-height: 205px; flex: auto; }
   .workspace section { padding: 16px; }

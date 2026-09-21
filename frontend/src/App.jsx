@@ -48,6 +48,7 @@ function App() {
   const [period, setPeriod] = useState('all');
   const [statsBusy, setStatsBusy] = useState(false);
   const [speechState, setSpeechState] = useState({ status: 'idle', content: '' });
+  const [speechFailure, setSpeechFailure] = useState(null);
   const speechRunRef = useRef(0);
   const speechEventRef = useRef(null);
   const [ttsVoices, setTtsVoices] = useState([]);
@@ -139,12 +140,12 @@ function App() {
     setToken(null); setUser(null); setLoaded(false);
     [...cards, ...recommended, ...adminSubmissions].forEach(item => { if (item.image_src) URL.revokeObjectURL(item.image_src); });
     setCards([]); setRecommended([]); setStats(null); setBoard([]); setCardSubmissions([]); setAdminSubmissions([]); setLinkedUsers([]); setSelectedUser(null); setText(''); setError(''); setTab('home');
-    setTtsSettings({ preset: 'child', voiceName: '', rate: 0.9, pitch: 1.25 }); setTtsSettingsSaved(false); setBusy(false);
+    setTtsSettings({ preset: 'child', voiceName: '', rate: 0.9, pitch: 1.25 }); setTtsSettingsSaved(false); setSpeechFailure(null); setBusy(false);
   }
 
   function updateBoard(next) {
     stopSpeech();
-    setBoard(next); saveBoard(user?.id, next); setText(''); setGenerationSource(''); setRequestId(crypto.randomUUID());
+    setBoard(next); saveBoard(user?.id, next); setText(''); setGenerationSource(''); setSpeechFailure(null); setRequestId(crypto.randomUUID());
   }
   function add(card) {
     if (board.length >= 12) { setError('카드는 최대 12장까지 선택할 수 있어요.'); return; }
@@ -177,10 +178,14 @@ function App() {
     }) : null).catch(e => setError(e.message));
     return event.completion;
   }
+  function speechFailureMessage(errorCode) {
+    if (errorCode === 'not-allowed') return '브라우저의 음성 재생 권한과 기기 음량을 확인한 뒤 다시 시도해 주세요.';
+    if (['language-unavailable', 'voice-unavailable'].includes(errorCode)) return '기기에 한국어 음성을 설치하거나 음성 설정에서 다른 음성을 선택해 주세요.';
+    if (errorCode === 'unsupported') return '이 브라우저에서는 음성 재생을 지원하지 않습니다. 최신 Chrome 또는 Edge에서 다시 열어 주세요.';
+    return '기기의 한국어 음성 설정과 음량을 확인한 뒤 다시 재생해 주세요.';
+  }
   function speakText(content, contentType = 'sentence') {
-    if (!window.speechSynthesis) { setError('이 브라우저는 음성 출력을 지원하지 않습니다.'); return; }
     finishSpeechEvent(speechEventRef.current, 'cancelled', 'replaced');
-    const runId = ++speechRunRef.current;
     const speechEvent = {
       id: crypto.randomUUID(), finished: false,
       started: null,
@@ -189,6 +194,13 @@ function App() {
       request_id: speechEvent.id, content_type: contentType, char_count: content.length,
     }) }).then(() => true).catch(e => { setError(e.message); return false; });
     speechEventRef.current = speechEvent;
+    setSpeechFailure(null);
+    if (!window.speechSynthesis) {
+      finishSpeechEvent(speechEvent, 'failed', 'unsupported');
+      setSpeechFailure({ content, contentType, errorCode: 'unsupported', retryable: false });
+      return;
+    }
+    const runId = ++speechRunRef.current;
     if (window.speechSynthesis.paused) window.speechSynthesis.resume();
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(content);
@@ -206,7 +218,7 @@ function App() {
       finishSpeechEvent(speechEvent, ['canceled', 'interrupted'].includes(errorEvent.error) ? 'cancelled' : 'failed', errorEvent.error);
       if (speechRunRef.current !== runId) return;
       setSpeechState({ status: 'idle', content: '' });
-      if (!['canceled', 'interrupted'].includes(errorEvent.error)) setError('음성을 재생하지 못했습니다. 기기의 한국어 음성 설정을 확인해 주세요.');
+      if (!['canceled', 'interrupted'].includes(errorEvent.error)) setSpeechFailure({ content, contentType, errorCode: errorEvent.error || 'unknown', retryable: true });
     };
     setSpeechState({ status: 'starting', content }); window.speechSynthesis.speak(utterance);
   }
@@ -404,6 +416,7 @@ function App() {
     <div className="app-content">
       <header className="topbar"><div><p className="eyebrow">오늘은 {todayLabel}</p><h1>{pageTitle}</h1></div><div className="topbar-statuses"><span className="status"><b className={loaded ? 'online' : ''}></b>{loaded ? '서비스 연결됨' : '연결 대기'}</span>{speechActive && <div className={`speech-player ${speechState.status}`} role="status" aria-live="polite"><span><b aria-hidden="true">🔊</b><strong>{speechStatusLabel}</strong><small title={speechState.content}>{speechState.content}</small></span>{speechState.status === 'playing' && <button type="button" onClick={pauseSpeech}>일시 정지</button>}{speechState.status === 'paused' && <button type="button" onClick={resumeSpeech}>재개</button>}<button type="button" onClick={stopSpeech}>중지</button></div>}</div></header>
       {error && <div role="alert" className="error">{error} <button disabled={busy} onClick={() => load(user)}>다시 연결</button></div>}
+      {speechFailure && <div role="alert" className="speech-error"><span aria-hidden="true">🔇</span><div><strong>음성을 재생하지 못했어요.</strong><p>{speechFailureMessage(speechFailure.errorCode)} 선택한 카드와 문장은 그대로 유지됩니다.</p></div><div className="speech-error-actions">{speechFailure.retryable && <button className="primary" onClick={() => speakText(speechFailure.content, speechFailure.contentType)}>다시 재생</button>}<button onClick={() => setSpeechFailure(null)}>닫기</button></div></div>}
       {!loaded && !error && <p role="status">카드를 불러오는 중입니다…</p>}
       {tab === 'home' && user.role !== 'caregiver' ? <section className="home-screen">
         <div className="home-heading"><div><p>원하는 활동을 선택해 주세요</p><h2>나의 PESC MATE</h2></div><span aria-hidden="true">🌈</span></div>

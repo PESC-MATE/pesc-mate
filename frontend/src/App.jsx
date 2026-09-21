@@ -10,6 +10,12 @@ const CARD_META = Object.fromEntries([
   ['toilet', '화장실'], ['home', '집'], ['happy', '좋아요'], ['hurt', '아파요'], ['no', '싫어요'], ['yes', '네'],
 ].map(([id, label], image_index) => [id, { id, label, image_index }]));
 
+const TTS_PRESETS = {
+  child: { label: '어린이 느낌', rate: 0.9, pitch: 1.25 },
+  woman: { label: '여성 느낌', rate: 0.95, pitch: 1.05 },
+  man: { label: '남성 느낌', rate: 0.85, pitch: 0.8 },
+};
+
 function App() {
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(false);
@@ -42,6 +48,8 @@ function App() {
   const [period, setPeriod] = useState('all');
   const [statsBusy, setStatsBusy] = useState(false);
   const [speaking, setSpeaking] = useState(false);
+  const [ttsVoices, setTtsVoices] = useState([]);
+  const [ttsSettings, setTtsSettings] = useState({ preset: 'child', voiceName: '', rate: 0.9, pitch: 1.25 });
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const [linkedUsers, setLinkedUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
@@ -92,6 +100,15 @@ function App() {
     }
     restoreLogin();
     return () => window.speechSynthesis?.cancel();
+  }, []);
+
+  useEffect(() => {
+    const synthesis = window.speechSynthesis;
+    if (!synthesis) return undefined;
+    const updateVoices = () => setTtsVoices(synthesis.getVoices().filter(voice => voice.lang.toLowerCase().startsWith('ko')));
+    updateVoices();
+    synthesis.addEventListener('voiceschanged', updateVoices);
+    return () => synthesis.removeEventListener('voiceschanged', updateVoices);
   }, []);
 
   async function handleLogin(event) {
@@ -147,14 +164,18 @@ function App() {
     if (!window.speechSynthesis) { setError('이 브라우저는 음성 출력을 지원하지 않습니다.'); return; }
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(content);
-    utterance.lang = 'ko-KR'; utterance.rate = 0.85;
-    const voice = window.speechSynthesis.getVoices().find(v => v.lang.startsWith('ko'));
+    utterance.lang = 'ko-KR'; utterance.rate = ttsSettings.rate; utterance.pitch = ttsSettings.pitch;
+    const voice = ttsVoices.find(item => item.name === ttsSettings.voiceName) || ttsVoices[0];
     if (voice) utterance.voice = voice;
     utterance.onend = () => setSpeaking(false);
     utterance.onerror = (event) => { setSpeaking(false); if (!['canceled', 'interrupted'].includes(event.error)) setError('음성을 재생하지 못했습니다. 기기의 한국어 음성 설정을 확인해 주세요.'); };
     setSpeaking(true); window.speechSynthesis.speak(utterance);
   }
   function speak() { speakText(text); }
+  function changeTtsPreset(preset) {
+    const values = TTS_PRESETS[preset];
+    setTtsSettings(current => ({ ...current, preset, rate: values.rate, pitch: values.pitch }));
+  }
   async function changePeriod(value) {
     setPeriod(value); setStatsBusy(true); setError('');
     try { setStats(await request(dashboardPath(value))); }
@@ -339,6 +360,16 @@ function App() {
         <button className="primary full" disabled={!board.length || busy} onClick={generate}>{busy ? '문장을 만드는 중…' : '문장 만들기 · 저장'}</button>
         <div className="sentence" aria-live="polite">{text || '만든 문장이 여기에 표시돼요.'}{text && <small className={`source-badge ${generationSource}`}>{generationSource === 'ollama' ? 'Qwen · Ollama 생성' : '규칙 기반 생성'}</small>}</div>
         <div className="actions"><button className="primary" disabled={!text || busy || speaking} onClick={speak}>🔊 읽어주기</button><button disabled={!speaking} onClick={() => { window.speechSynthesis.cancel(); setSpeaking(false); }}>중지</button></div>
+        <details className="tts-settings">
+          <summary>⚙️ 음성 설정</summary>
+          <div className="tts-settings-grid">
+            <label>음성 느낌<select value={ttsSettings.preset} onChange={event => changeTtsPreset(event.target.value)}>{Object.entries(TTS_PRESETS).map(([value, preset]) => <option key={value} value={value}>{preset.label}</option>)}</select></label>
+            <label>기기 한국어 음성<select value={ttsSettings.voiceName} onChange={event => setTtsSettings(current => ({ ...current, voiceName: event.target.value }))}><option value="">한국어 음성 자동 선택</option>{ttsVoices.map(voice => <option key={voice.voiceURI} value={voice.name}>{voice.name}</option>)}</select></label>
+            <label>속도 <output>{ttsSettings.rate.toFixed(2)}배</output><input type="range" min="0.5" max="1.5" step="0.05" value={ttsSettings.rate} onChange={event => setTtsSettings(current => ({ ...current, rate: Number(event.target.value) }))} /></label>
+            <label>음높이 <output>{ttsSettings.pitch.toFixed(2)}</output><input type="range" min="0.5" max="1.5" step="0.05" value={ttsSettings.pitch} onChange={event => setTtsSettings(current => ({ ...current, pitch: Number(event.target.value) }))} /></label>
+          </div>
+          <div className="tts-preview"><small>{ttsVoices.length ? `한국어 음성 ${ttsVoices.length}개를 사용할 수 있어요.` : '기기의 기본 음성으로 재생합니다.'}</small><button type="button" disabled={busy} onClick={() => speakText('안녕하세요. 목소리를 확인해 보세요.')}>미리 듣기</button></div>
+        </details>
         <p className="muted">Ollama Qwen으로 문장을 만들며, 모델을 사용할 수 없으면 규칙 기반 문장으로 자동 전환합니다.</p>
       </section></div>
     </div> : tab === 'catalog' && user.role !== 'caregiver' ? <section className="card-catalog">

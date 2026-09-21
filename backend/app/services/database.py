@@ -24,4 +24,5 @@ def database():
 def log_crud(operation, collection, detail=None):
     """Log database actions without document contents or credentials."""
     suffix = f' | {detail}' if detail else ''
-    logger.info('DB CRUD | %s | %s%s', operation, collection, suffix)
+    log = logger.debug if operation.upper() == 'READ' else logger.info
+    log('DB CRUD | %s | %s%s', operation, collection, suffix)

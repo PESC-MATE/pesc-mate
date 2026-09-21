@@ -724,10 +724,11 @@ curl "http://127.0.0.1:8000/api/dashboard?days=7" \
 | 추천 | `communication_sessions` | 로그인 사용자 전체 기록 조회 |
 | 이용 현황 | `communication_sessions` | 사용자 및 기간 조건 조회 |
 
-백엔드 로그는 문서 내용, 비밀번호 및 토큰을 출력하지 않고 다음 형식으로 작업만 기록한다.
+백엔드 로그는 문서 내용, 비밀번호 및 토큰을 출력하지 않고 다음 형식으로 변경 작업만 기록한다.
+조회(`READ`) 작업은 디버그 레벨로 낮춰 기본 실행 로그에는 표시하지 않는다.
 
 ```text
-DB CRUD | READ | communication_sessions | 사용자 통계 조회 (최근 7일)
+DB CRUD | CREATE | communication_sessions | 문장 기록 저장
 ```
 
 # 13. 현재 제약사항

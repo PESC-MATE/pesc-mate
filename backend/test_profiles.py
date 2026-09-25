@@ -31,11 +31,15 @@ class ProfileTests(unittest.TestCase):
         database.caregiver_links.find.return_value = [dict(user_id='u')]
         self.assertEqual(linked_users('caregiver')[0]['profile'], account['profile'])
 
-    def test_presets_include_three_profile_images(self):
+    def test_presets_include_profile_images(self):
         self.assertEqual(PRESETS, [
             dict(id='pink', label='핑크'),
             dict(id='orange', label='오렌지'),
             dict(id='sky', label='하늘'),
+            dict(id='cream', label='크림'),
+            dict(id='green', label='그린'),
+            dict(id='blue', label='블루'),
+            dict(id='space', label='우주'),
         ])
 
     def test_legacy_user_and_response_preserve_profile(self):

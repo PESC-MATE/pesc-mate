@@ -3,8 +3,15 @@ import { request, requestBlob } from './services/api';
 import pinkProfile from './assets/profiles/PF01_pink.png';
 import orangeProfile from './assets/profiles/PF02_orange.png';
 import skyProfile from './assets/profiles/PF03_sky.png';
+import creamProfile from './assets/profiles/PF04_cream.png';
+import greenProfile from './assets/profiles/PF05_green.png';
+import blueProfile from './assets/profiles/PF06_blue.png';
+import spaceProfile from './assets/profiles/PF07_space.png';
 
-const PRESET_IMAGES = { pink: pinkProfile, orange: orangeProfile, sky: skyProfile };
+const PRESET_IMAGES = {
+  pink: pinkProfile, orange: orangeProfile, sky: skyProfile, cream: creamProfile,
+  green: greenProfile, blue: blueProfile, space: spaceProfile,
+};
 
 export function Avatar({ user }) {
   const [image, setImage] = useState(null);

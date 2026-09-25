@@ -9,6 +9,10 @@ PRESETS = [
     dict(id='pink', label='핑크'),
     dict(id='orange', label='오렌지'),
     dict(id='sky', label='하늘'),
+    dict(id='cream', label='크림'),
+    dict(id='green', label='그린'),
+    dict(id='blue', label='블루'),
+    dict(id='space', label='우주'),
 ]
 
 

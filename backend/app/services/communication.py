@@ -7,7 +7,8 @@ from fastapi import HTTPException
 from pymongo.errors import DuplicateKeyError, PyMongoError
 from app.services.card_metadata import with_inferred_metadata
 from app.services.database import database, log_crud
-from app.services.model import generate_sentence
+from app.services.model import generate_sentence, status as model_status
+from app.services.sentence_policy import policy_versions
 from app.services.sentence_validation import validate_safety, validate_semantics
 
 logger = logging.getLogger('uvicorn.error')
@@ -162,11 +163,13 @@ def save_session(request, user_id, custom_cards=None):
     card_index = INDEX | custom_index
     fallback = sentence(card_ids, card_index)
     result, generation_source = generate_sentence([card_index[key]['label'] for key in card_ids], fallback)
+    initial_source = generation_source
     validation = validate_semantics([card_index[key] for key in card_ids], result)
     safety = validate_safety(result)
+    fallback_reasons = []
     if generation_source == 'ollama' and (not validation['passed'] or not safety['passed']):
-        reasons = validation['missing_card_ids'] + safety['flags']
-        logger.warning('MODEL | FALLBACK | 문장 검증 실패 (%s)', ','.join(reasons))
+        fallback_reasons = validation['missing_card_ids'] + safety['flags']
+        logger.warning('MODEL | FALLBACK | 문장 검증 실패 (%s)', ','.join(fallback_reasons))
         result, generation_source = fallback, 'rule'
     fallback_safety = validate_safety(result)
     if not fallback_safety['passed']:
@@ -184,9 +187,26 @@ def save_session(request, user_id, custom_cards=None):
         snapshots = {key: {field: card_index[key].get(field) for field in (
             'id', 'label', 'symbol', 'category', 'meaning', 'part_of_speech', 'has_batchim', 'sentence_role')}
                      for key in card_ids if key in custom_index}
+        versions = policy_versions()
+        generation = {
+            'source': generation_source,
+            'initial_source': initial_source,
+            'model': model_status()['model'] if initial_source == 'ollama' else None,
+            'versions': versions,
+            'validation': {
+                'semantics': validation,
+                'initial_safety': safety,
+                'final_safety': fallback_safety,
+            },
+            'fallback': {
+                'applied': initial_source != generation_source,
+                'reasons': fallback_reasons,
+            },
+        }
         document = {'_id': request_id, 'user_id': user_id, 'cards': card_ids, 'card_metadata': snapshots,
                     'sentence': result,
-                    'generation_source': generation_source, 'created_at': datetime.now(timezone.utc)}
+                    'generation_source': generation_source, 'generation': generation,
+                    'created_at': datetime.now(timezone.utc)}
         try:
             collection.insert_one(document)
             log_crud('CREATE', 'communication_sessions', '문장 기록 저장')

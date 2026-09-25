@@ -165,6 +165,7 @@ class CommunicationSessionResponse(BaseModel):
     cards: list[str]
     sentence: str
     generation_source: str | None = None
+    generation: dict[str, object] | None = None
     caregiver_note: str | None = None
     created_at: datetime
 

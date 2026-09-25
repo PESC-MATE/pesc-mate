@@ -154,6 +154,7 @@ Authorization: Bearer {access_token}
 | `cards` | string array | 예 | 선택 순서가 보존된 카드 ID 목록 |
 | `sentence` | string | 예 | 생성된 한국어 문장 |
 | `generation_source` | string | 아니요 | `ollama` 또는 `rule` |
+| `generation` | object | 아니요 | 모델·정책 버전, 의미·안전 검사와 폴백 처리 결과 |
 | `caregiver_note` | string 또는 null | 아니요 | 보호자 대시보드 조회 시 현재 보호자가 작성한 메모 |
 | `created_at` | ISO 8601 string | 예 | 생성 시각 |
 
@@ -163,6 +164,24 @@ Authorization: Bearer {access_token}
   "user_id": "demo",
   "cards": ["me", "water", "drink"],
   "sentence": "저는 물을 마시고 싶어요.",
+  "generation_source": "ollama",
+  "generation": {
+    "source": "ollama",
+    "initial_source": "ollama",
+    "model": "qwen2.5:0.5b",
+    "versions": {
+      "persona": "aac-ko-v1",
+      "output_rules": "sentence-output-v2",
+      "rule_engine": "ko-particle-v2",
+      "safety": "sentence-safety-v1"
+    },
+    "validation": {
+      "semantics": {"passed": true, "missing_card_ids": []},
+      "initial_safety": {"passed": true, "flags": []},
+      "final_safety": {"passed": true, "flags": []}
+    },
+    "fallback": {"applied": false, "reasons": []}
+  },
   "created_at": "2026-09-09T01:30:00.000000+00:00"
 }
 ```

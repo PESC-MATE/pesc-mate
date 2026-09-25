@@ -6,7 +6,7 @@ from uuid import uuid4
 from fastapi import HTTPException
 from pydantic import ValidationError
 from pymongo.errors import DuplicateKeyError
-from app.api.router import SentenceRequest
+from app.api.router import CommunicationSessionResponse, SentenceRequest
 from app.services.communication import CARDS, attach_particle, ensure_demo_history, save_session, sentence, statistics
 from app.services.sentence_validation import validate_safety, validate_semantics
 
@@ -101,6 +101,9 @@ class CommunicationTests(unittest.TestCase):
         )
         self.assertEqual(result['sentence'], '저는 물을 마시고 싶어요.')
         self.assertEqual(result['generation_source'], 'rule')
+        self.assertEqual(result['generation']['initial_source'], 'ollama')
+        self.assertTrue(result['generation']['fallback']['applied'])
+        self.assertEqual(result['generation']['fallback']['reasons'], ['water', 'drink'])
 
     @patch('app.services.communication.generate_sentence')
     def test_generated_sentence_preserving_card_meaning_is_kept(self, mocked_generate):
@@ -110,6 +113,18 @@ class CommunicationTests(unittest.TestCase):
         )
         self.assertEqual(result['sentence'], '저는 물을 마시고 싶어요.')
         self.assertEqual(result['generation_source'], 'ollama')
+        self.assertEqual(result['generation']['model'], 'qwen2.5:0.5b')
+        self.assertEqual(result['generation']['versions'], {
+            'persona': 'aac-ko-v1',
+            'output_rules': 'sentence-output-v2',
+            'rule_engine': 'ko-particle-v2',
+            'safety': 'sentence-safety-v1',
+        })
+        self.assertTrue(result['generation']['validation']['semantics']['passed'])
+        self.assertTrue(result['generation']['validation']['final_safety']['passed'])
+        self.assertFalse(result['generation']['fallback']['applied'])
+        response = CommunicationSessionResponse(**result)
+        self.assertEqual(response.generation['versions']['persona'], 'aac-ko-v1')
 
     @patch('app.services.communication.generate_sentence')
     def test_generated_sentence_cannot_drop_negation(self, mocked_generate):
@@ -135,6 +150,8 @@ class CommunicationTests(unittest.TestCase):
         )
         self.assertEqual(result['sentence'], '저는 물을 마시고 싶어요.')
         self.assertEqual(result['generation_source'], 'rule')
+        self.assertIn('personal_data', result['generation']['fallback']['reasons'])
+        self.assertTrue(result['generation']['validation']['final_safety']['passed'])
 
     @patch('app.services.communication.generate_sentence')
     def test_unsafe_rule_sentence_is_not_exposed(self, mocked_generate):

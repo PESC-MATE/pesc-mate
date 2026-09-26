@@ -67,6 +67,8 @@ function App() {
   const [tab, setTab] = useState('home');
   const [text, setText] = useState('');
   const [generationSource, setGenerationSource] = useState('');
+  const [generatedSessionId, setGeneratedSessionId] = useState('');
+  const [generationAttempt, setGenerationAttempt] = useState(1);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -165,13 +167,13 @@ function App() {
     clearBoard(user?.id);
     setToken(null); setUser(null); setLoaded(false); setShowProfile(false); setProfileNotice('');
     [...cards, ...recommended, ...adminSubmissions].forEach(item => { if (item.image_src) URL.revokeObjectURL(item.image_src); });
-    setCards([]); setRecommended([]); setStats(null); setBoard([]); setCardSubmissions([]); setAdminSubmissions([]); setLinkedUsers([]); setSelectedUser(null); setText(''); setError(''); setTab('home');
+    setCards([]); setRecommended([]); setStats(null); setBoard([]); setCardSubmissions([]); setAdminSubmissions([]); setLinkedUsers([]); setSelectedUser(null); setText(''); setGeneratedSessionId(''); setGenerationAttempt(1); setError(''); setTab('home');
     setTtsSettings({ preset: 'child', voiceName: '', rate: 0.9, pitch: 1.25 }); setTtsSettingsSaved(false); setSpeechFailure(null); setBusy(false);
   }
 
   function updateBoard(next) {
     stopSpeech();
-    setBoard(next); saveBoard(user?.id, next); setText(''); setGenerationSource(''); setSpeechFailure(null); setRequestId(crypto.randomUUID());
+    setBoard(next); saveBoard(user?.id, next); setText(''); setGenerationSource(''); setGeneratedSessionId(''); setGenerationAttempt(1); setSpeechFailure(null); setRequestId(crypto.randomUUID());
   }
   function add(card) {
     if (board.length >= 12) { setError('카드는 최대 12장까지 선택할 수 있어요.'); return; }
@@ -188,10 +190,30 @@ function App() {
       const result = await request('/sentences', { method: 'POST', body: JSON.stringify({ cards: board.map(c => c.id), request_id: requestId }) });
       setText(result.sentence);
       setGenerationSource(result.generation_source || 'rule');
+      setGeneratedSessionId(result.id);
+      setGenerationAttempt(result.generation_attempt || 1);
       try {
         const [rec, dashboard] = await Promise.all([request('/recommendations'), request(dashboardPath())]);
         setRecommended(rec); setStats(dashboard);
       } catch { setError('문장은 저장되었습니다. 통계 갱신은 다시 연결을 눌러 주세요.'); }
+    } catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  }
+  async function regenerate() {
+    if (!generatedSessionId) return;
+    setBusy(true); setError('');
+    try {
+      const result = await request(`/sentences/${generatedSessionId}/regenerate`, {
+        method: 'POST', body: JSON.stringify({ request_id: crypto.randomUUID() }),
+      });
+      setText(result.sentence);
+      setGenerationSource(result.generation_source || 'rule');
+      setGeneratedSessionId(result.id);
+      setGenerationAttempt(result.generation_attempt || generationAttempt + 1);
+      try {
+        const [rec, dashboard] = await Promise.all([request('/recommendations'), request(dashboardPath())]);
+        setRecommended(rec); setStats(dashboard);
+      } catch { setError('재생성 문장은 저장되었습니다. 통계 갱신은 다시 연결을 눌러 주세요.'); }
     } catch (e) { setError(e.message); }
     finally { setBusy(false); }
   }
@@ -478,8 +500,8 @@ function App() {
         {!board.length && <EmptyState>왼쪽 카드를 눌러 보세요.<br />나 → 물 → 마시다</EmptyState>}
         <ol>{board.map((c, i) => <li key={`${c.id}-${i}`}><span>{c.symbol} {c.label}</span><div><button aria-label={`${i + 1}번째 카드 앞으로`} disabled={i === 0 || busy} onClick={() => move(i, -1)}>←</button><button aria-label={`${i + 1}번째 카드 뒤로`} disabled={i === board.length - 1 || busy} onClick={() => move(i, 1)}>→</button><button aria-label={`${i + 1}번째 카드 삭제`} disabled={busy} onClick={() => updateBoard(board.filter((_, n) => n !== i))}>×</button></div></li>)}</ol>
         <button className="primary full" disabled={!board.length || busy} onClick={generate}>{busy ? '문장을 만드는 중…' : '문장 만들기 · 저장'}</button>
-        <div className="sentence" aria-live="polite">{text || '만든 문장이 여기에 표시돼요.'}{text && <small className={`source-badge ${generationSource}`}>{generationSource === 'ollama' ? 'Qwen · Ollama 생성' : '규칙 기반 생성'}</small>}</div>
-        <div className="actions"><button className="primary" disabled={!text || busy || speechActive} onClick={speak}>🔊 읽어주기</button>{speechState.status === 'playing' && <button onClick={pauseSpeech}>일시 정지</button>}{speechState.status === 'paused' && <button onClick={resumeSpeech}>재개</button>}<button disabled={!speechActive} onClick={stopSpeech}>중지</button></div>
+        <div className="sentence" aria-live="polite">{text || '만든 문장이 여기에 표시돼요.'}{text && <small className={`source-badge ${generationSource}`}>{generationSource === 'ollama' ? 'Qwen · Ollama 생성' : '규칙 기반 생성'}{generationAttempt > 1 ? ` · 재생성 ${generationAttempt - 1}회` : ''}</small>}</div>
+        <div className="actions"><button className="primary" disabled={!text || busy || speechActive} onClick={speak}>🔊 읽어주기</button><button disabled={!generatedSessionId || busy || speechActive} onClick={regenerate}>{busy ? '만드는 중…' : '↻ 다시 만들기'}</button>{speechState.status === 'playing' && <button onClick={pauseSpeech}>일시 정지</button>}{speechState.status === 'paused' && <button onClick={resumeSpeech}>재개</button>}<button disabled={!speechActive} onClick={stopSpeech}>중지</button></div>
         <details className="tts-settings">
           <summary>⚙️ 음성 설정</summary>
           <div className="tts-settings-grid">

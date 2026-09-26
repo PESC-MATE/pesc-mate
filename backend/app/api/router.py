@@ -3,7 +3,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, Field
 from uuid import UUID
-from app.services.communication import CARDS, save_session, statistics
+from app.services.communication import CARDS, regenerate_session, save_session, statistics
 from app.services.authentication import current_user, dashboard_user, linked_users, login, logout, register, security
 from app.services.model import status as model_status
 from app.services.caregiver_notes import delete_note, notes_for, save_note
@@ -30,6 +30,10 @@ def get_model_status(user=Depends(current_user)):
 
 class SentenceRequest(BaseModel):
     cards: list[str] = Field(min_length=1, max_length=12)
+    request_id: UUID
+
+
+class RegenerateSentenceRequest(BaseModel):
     request_id: UUID
 
 
@@ -166,6 +170,8 @@ class CommunicationSessionResponse(BaseModel):
     sentence: str
     generation_source: str | None = None
     generation: dict[str, object] | None = None
+    regeneration_of: UUID | None = None
+    generation_attempt: int = 1
     caregiver_note: str | None = None
     created_at: datetime
 
@@ -348,6 +354,15 @@ def review_card_submission(submission_id: str, request: CardReviewRequest,
 def generate_sentence(request: SentenceRequest, user=Depends(current_user)):
     require_communicator(user)
     return save_session(request, user['id'], approved_cards_for(user['id']))
+
+
+@api_router.post('/sentences/{session_id}/regenerate', response_model=CommunicationSessionResponse,
+                 tags=['문장'])
+def regenerate_sentence(session_id: UUID, request: RegenerateSentenceRequest,
+                        user=Depends(current_user)):
+    require_communicator(user)
+    return regenerate_session(session_id, request.request_id, user['id'],
+                              approved_cards_for(user['id']))
 
 
 @api_router.get('/recommendations', response_model=list[CardResponse], response_model_exclude_none=True, tags=['추천'])

@@ -91,6 +91,7 @@ Authorization: Bearer {access_token}
 | 관리자 | GET | `/api/admin/card-submissions` | 관리자 | 전체 카드 요청 조회 |
 | 관리자 | PATCH | `/api/admin/card-submissions/{id}` | 관리자 | 카드 승인 또는 반려 |
 | 문장 | POST | `/api/sentences` | 필요 | 문장 생성 및 기록 저장 |
+| 문장 | POST | `/api/sentences/{session_id}/regenerate` | 필요 | 기존 카드로 문장 재생성 및 별도 저장 |
 | 추천 | GET | `/api/recommendations` | 필요 | 사용자별 추천 카드 조회 |
 | 통계 | GET | `/api/dashboard` | 필요 | 본인 또는 연결 사용자 이용 통계 조회 |
 
@@ -154,6 +155,8 @@ Authorization: Bearer {access_token}
 | `cards` | string array | 예 | 선택 순서가 보존된 카드 ID 목록 |
 | `sentence` | string | 예 | 생성된 한국어 문장 |
 | `generation_source` | string | 아니요 | `ollama` 또는 `rule` |
+| `regeneration_of` | UUID string | 아니요 | 재생성 계열의 최초 문장 ID |
+| `generation_attempt` | integer | 예 | 최초 생성은 1, 이후 재생성 차수 |
 | `generation` | object | 아니요 | 모델·정책 버전, 의미·안전 검사와 폴백 처리 결과 |
 | `caregiver_note` | string 또는 null | 아니요 | 보호자 대시보드 조회 시 현재 보호자가 작성한 메모 |
 | `created_at` | ISO 8601 string | 예 | 생성 시각 |
@@ -570,6 +573,36 @@ Content-Type: application/json
 - `401`: 인증 실패
 - `409`: 같은 `request_id`가 다른 카드 목록 또는 다른 사용자 기록과 충돌
 - `422`: 카드 개수, UUID 형식 또는 카드 ID가 유효하지 않음
+- `503`: MongoDB 연결 실패
+
+## 8.2 문장 재생성 및 별도 저장
+
+```http
+POST /api/sentences/{session_id}/regenerate
+Authorization: Bearer {access_token}
+Content-Type: application/json
+```
+
+지정한 문장 기록의 카드와 순서를 그대로 사용해 새 문장을 생성한다. 기존 기록은 수정하지
+않고 새 `CommunicationSession`으로 저장하며, `regeneration_of`에는 최초 문장 ID,
+`generation_attempt`에는 생성 차수를 반환한다. 재생성된 문장을 다시 재생성해도 최초 문장
+아래에 같은 계열로 연결된다.
+
+```json
+{
+  "request_id": "0db65d89-a3c9-4cf6-9422-0b0310843097"
+}
+```
+
+`request_id`는 재생성 요청마다 새 UUID를 사용한다. 동일한 UUID로 같은 재생성을 재시도하면
+기존 결과를 반환하므로 중복 기록이 생기지 않는다.
+
+### 오류 응답
+
+- `401`: 인증 실패
+- `404`: 현재 사용자의 문장 기록을 찾을 수 없음
+- `409`: 같은 `request_id`가 다른 재생성 요청과 충돌
+- `422`: UUID 형식이 유효하지 않음
 - `503`: MongoDB 연결 실패
 
 # 9. 추천 API

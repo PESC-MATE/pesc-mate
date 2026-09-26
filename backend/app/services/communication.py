@@ -2,6 +2,7 @@
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 import logging
+from types import SimpleNamespace
 
 from fastapi import HTTPException
 from pymongo.errors import DuplicateKeyError, PyMongoError
@@ -157,7 +158,7 @@ def sentence(ids, card_index=None):
     return ' · '.join(cards[key]['label'] for key in ids)
 
 
-def save_session(request, user_id, custom_cards=None):
+def save_session(request, user_id, custom_cards=None, regeneration_of=None, generation_attempt=1):
     card_ids = list(request.cards)
     custom_index = {card['id']: with_inferred_metadata(card) for card in (custom_cards or [])}
     card_index = INDEX | custom_index
@@ -181,7 +182,8 @@ def save_session(request, user_id, custom_cards=None):
         existing = collection.find_one({'_id': request_id, 'user_id': user_id})
         log_crud('READ', 'communication_sessions', '중복 요청 확인')
         if existing:
-            if existing['cards'] != card_ids:
+            if (existing['cards'] != card_ids or
+                    existing.get('regeneration_of') != regeneration_of):
                 raise HTTPException(409, '같은 요청 번호에 다른 카드가 전달되었습니다.')
             return _public(existing)
         snapshots = {key: {field: card_index[key].get(field) for field in (
@@ -206,6 +208,7 @@ def save_session(request, user_id, custom_cards=None):
         document = {'_id': request_id, 'user_id': user_id, 'cards': card_ids, 'card_metadata': snapshots,
                     'sentence': result,
                     'generation_source': generation_source, 'generation': generation,
+                    'regeneration_of': regeneration_of, 'generation_attempt': generation_attempt,
                     'created_at': datetime.now(timezone.utc)}
         try:
             collection.insert_one(document)
@@ -213,7 +216,8 @@ def save_session(request, user_id, custom_cards=None):
         except DuplicateKeyError:
             existing = collection.find_one({'_id': request_id, 'user_id': user_id})
             log_crud('READ', 'communication_sessions', '동시 요청 결과 확인')
-            if not existing or existing['cards'] != card_ids:
+            if (not existing or existing['cards'] != card_ids or
+                    existing.get('regeneration_of') != regeneration_of):
                 raise HTTPException(409, '같은 요청 번호에 다른 카드가 전달되었습니다.')
             return _public(existing)
         return _public(document)
@@ -221,6 +225,35 @@ def save_session(request, user_id, custom_cards=None):
         raise
     except PyMongoError as exc:
         raise HTTPException(503, 'MongoDB에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.') from exc
+
+
+def regenerate_session(session_id, request_id, user_id, custom_cards=None):
+    """Generate a new history row while preserving the original session."""
+    session_id = str(session_id)
+    request_id = str(request_id)
+    try:
+        collection = _collection()
+        previous = collection.find_one({'_id': session_id, 'user_id': user_id})
+        log_crud('READ', 'communication_sessions', '재생성 대상 조회')
+        if not previous:
+            raise HTTPException(404, '재생성할 문장 기록을 찾을 수 없습니다.')
+        root_id = previous.get('regeneration_of') or session_id
+        existing = collection.find_one({'_id': request_id, 'user_id': user_id})
+        log_crud('READ', 'communication_sessions', '재생성 중복 요청 확인')
+        if existing:
+            if existing.get('regeneration_of') != root_id or existing.get('cards') != previous['cards']:
+                raise HTTPException(409, '같은 요청 번호가 다른 문장 재생성에 사용되었습니다.')
+            return _public(existing)
+        attempt = collection.count_documents({'user_id': user_id, 'regeneration_of': root_id}) + 2
+    except HTTPException:
+        raise
+    except PyMongoError as exc:
+        raise HTTPException(503, 'MongoDB에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.') from exc
+    available_custom_cards = {card['id']: card for card in (custom_cards or [])}
+    available_custom_cards.update(previous.get('card_metadata') or {})
+    request = SimpleNamespace(cards=previous['cards'], request_id=request_id)
+    return save_session(request, user_id, list(available_custom_cards.values()), regeneration_of=root_id,
+                        generation_attempt=attempt)
 
 
 def statistics(user_id, days=None, now=None):

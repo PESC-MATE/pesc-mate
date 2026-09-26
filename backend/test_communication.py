@@ -7,7 +7,8 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 from pymongo.errors import DuplicateKeyError
 from app.api.router import CommunicationSessionResponse, SentenceRequest
-from app.services.communication import CARDS, attach_particle, ensure_demo_history, save_session, sentence, statistics
+from app.services.communication import (CARDS, attach_particle, ensure_demo_history,
+                                        regenerate_session, save_session, sentence, statistics)
 from app.services.sentence_validation import validate_safety, validate_semantics
 
 
@@ -174,6 +175,36 @@ class CommunicationTests(unittest.TestCase):
         request.cards = ['rice', 'eat']
         with self.assertRaises(HTTPException) as caught: save_session(request, 'demo')
         self.assertEqual(caught.exception.status_code, 409)
+
+    def test_regeneration_is_stored_as_separate_history(self):
+        original = save_session(
+            SentenceRequest(cards=['me', 'water', 'drink'], request_id=uuid4()), 'demo',
+        )
+        regenerated = regenerate_session(original['id'], uuid4(), 'demo')
+        again = regenerate_session(regenerated['id'], uuid4(), 'demo')
+
+        self.assertEqual(statistics('demo')['sessions'], 3)
+        self.assertEqual(regenerated['cards'], original['cards'])
+        self.assertNotEqual(regenerated['id'], original['id'])
+        self.assertEqual(regenerated['regeneration_of'], original['id'])
+        self.assertEqual(regenerated['generation_attempt'], 2)
+        self.assertEqual(again['regeneration_of'], original['id'])
+        self.assertEqual(again['generation_attempt'], 3)
+        self.assertEqual(self.collection.documents[original['id']]['generation_attempt'], 1)
+
+    def test_regeneration_retry_is_idempotent(self):
+        original = save_session(SentenceRequest(cards=['water'], request_id=uuid4()), 'demo')
+        request_id = uuid4()
+        first = regenerate_session(original['id'], request_id, 'demo')
+        retried = regenerate_session(original['id'], request_id, 'demo')
+        self.assertEqual(retried['id'], first['id'])
+        self.assertEqual(statistics('demo')['sessions'], 2)
+
+    def test_regeneration_cannot_read_another_users_session(self):
+        original = save_session(SentenceRequest(cards=['water'], request_id=uuid4()), 'first-user')
+        with self.assertRaises(HTTPException) as caught:
+            regenerate_session(original['id'], uuid4(), 'second-user')
+        self.assertEqual(caught.exception.status_code, 404)
 
     def test_request_id_cannot_expose_another_users_session(self):
         request = SentenceRequest(cards=['water'], request_id=uuid4())
